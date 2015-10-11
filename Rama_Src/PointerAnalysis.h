@@ -20,6 +20,67 @@ using namespace std;
 
 namespace Rama {
   
+  // class op_info
+  // This class holds the information for two entities:
+  // 1. Information computed for each instruction
+  // 2. Information parsed for each operand of an information
+  class op_info {
+    public:
+      
+      op_info(): isTID(false),
+                 value(0),
+                 valueFP(0.0),
+                 size(1),
+                 width(0),
+                 name(""),
+                 BasicBlockPtr(NULL),
+                 FunctionPtr(NULL),
+                 isLiteral(false),
+                 isFixedPoint(false),
+                 isInstruction(false),
+                 isBasicBlockPtr(false),
+                 isFunctionPtr(false),
+                 isPointer(false),
+                 isAlloca(false),
+                 isArray(false),
+                 isCall(false),
+                 auxilliary_op(NULL),
+                 try_widen(false)
+      {
+        // abstractDomain.clear(); // TODO - uncomment
+      }
+
+      ~op_info() {}
+
+      bool isTID;
+      int value;
+      double valueFP; // TODO - AV - is this needed?
+      int size;
+      int width;
+      string name;
+
+      BasicBlock* BasicBlockPtr;
+      Function* FunctionPtr;
+      bool isLiteral;
+      bool isFixedPoint;
+      bool isInstruction;
+      bool isBasicBlockPtr;
+      bool isFunctionPtr;
+      bool isPointer;
+      bool isAlloca;
+      bool isArray;
+      bool isCall; // set if it is a call instruction. name will give the function name
+
+      op_info* auxilliary_op;
+      // abstractDomVec_t cmp_val; // TODO - uncomment
+      CmpInst::Predicate cmp_pred;
+
+      bool try_widen;
+
+      // Each entry in this vector represents a thread
+      // abstractDomVec_t abstractDomain; // TODO -uncomment
+  };
+        
   // Equivalent to printCode class in Gagan's code
   class FunctionAnalysis : public FunctionPass {
     public:

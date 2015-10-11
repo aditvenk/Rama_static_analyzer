@@ -10,22 +10,19 @@ using namespace llvm;
 using namespace std;
 using namespace Rama;
 
-char FunctionAnalysis::ID = 0;
+/* Register Passes with LLVM */
+char PointerAnalysis::ID = 0;
+static RegisterPass<PointerAnalysis> X("rama", "Multi-threaded pointer analyzer");
 
+char FunctionAnalysis::ID = 0;
 static RegisterPass<FunctionAnalysis> Y("rama_functions", "Rama function analysis", true, false);
 
 bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second arg is true if F will be executed by a single flow of control
-  
   string fnName = F.getName().str();
   cerr <<"processFunction called on "<<fnName<<endl;
 
   return false;
 }
-
-
-char PointerAnalysis::ID = 0;
-
-static RegisterPass<PointerAnalysis> X("rama", "Multi-threaded pointer analyzer");
 
 bool PointerAnalysis::analyzeFunctions(Module &M) {
   Function* func = M.getFunction("pthread_create");
