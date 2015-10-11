@@ -20,7 +20,32 @@ using namespace std;
 
 namespace Rama {
   
-  // PointerAnalysis 
+  // Equivalent to printCode class in Gagan's code
+  class FunctionAnalysis : public FunctionPass {
+    public:
+      static char ID; 
+      FunctionAnalysis() : FunctionPass(ID) {}
+
+      bool processFunction (Function& F, bool isSerial); // second arg is true if F will be executed by a single flow of control
+
+      virtual bool runOnFunction (Function &F) {
+        processFunction(F, false);
+        return false;
+      }
+
+      virtual void getAnalysisUsage(AnalysisUsage &AU) const {
+        // we don't modify the program, so we preserve all analyses
+        AU.setPreservesAll();
+      }
+
+      void setName (string name) { this->name = name; }
+    
+    private:
+      string name;
+
+  };
+
+  // PointerAnalysis - equivalent to abstractAnalysis class in Gagan's code
   class PointerAnalysis : public ModulePass {
     private:
       // initial stuff

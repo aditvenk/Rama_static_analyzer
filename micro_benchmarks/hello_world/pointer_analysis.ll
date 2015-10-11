@@ -33,7 +33,7 @@ declare void @_ZNSt8ios_base4InitD1Ev(%"class.std::ios_base::Init"*) #0
 declare i32 @__cxa_atexit(void (i8*)*, i8*, i8*) #1
 
 ; Function Attrs: uwtable
-define i32 @main() #2 {
+define void @_Z12printer_funci(i32 %z) #2 {
 entry:
   %vtable.i = load i8*, i8** bitcast (%"class.std::basic_ostream"* @_ZSt4cout to i8**), align 8, !tbaa !1
   %vbase.offset.ptr.i = getelementptr i8, i8* %vtable.i, i64 -24
@@ -116,6 +116,13 @@ _ZNKSt5ctypeIcE5widenEc.exit27:                   ; preds = %if.then.i.21, %if.e
   %retval.0.i.26 = phi i8 [ %13, %if.then.i.21 ], [ %call.i.24, %if.end.i.25 ]
   %call1.i.11 = tail call dereferenceable(272) %"class.std::basic_ostream"* @_ZNSo3putEc(%"class.std::basic_ostream"* nonnull %call.i, i8 signext %retval.0.i.26)
   %call.i.12 = tail call dereferenceable(272) %"class.std::basic_ostream"* @_ZNSo5flushEv(%"class.std::basic_ostream"* nonnull %call1.i.11)
+  ret void
+}
+
+; Function Attrs: uwtable
+define i32 @main() #2 {
+entry:
+  tail call void @_Z12printer_funci(i32 undef)
   ret i32 0
 }
 
