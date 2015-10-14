@@ -1,0 +1,110 @@
+#include <stdio.h>
+#include "clp.h"
+
+int main(){
+	clp_t x1,x2;
+	init_clp();
+	print_hex=true;
+/*	FILL_CLP(x1,0x10000,0x10000,1);
+	for(int i=0;i<32;i++){
+		fprintf(stderr,"i=%d :",i);
+		x2=clp_fn(CLP_UNION,x1,x2,false);
+		x2=clp_fn(CLP_LSHIFT,x2,one,false);
+		PRINT_CLP(x2);
+		printf("\n");
+		if(i==2) break;
+	}
+	x2.u=((MAX_P-x2.u)/x2.d)*x2.d+x2.u;
+	PRINT_CLP(x2);
+	printf(" ... w\n");
+		x2=clp_fn(CLP_UNION,x1,x2,false);
+		x2=clp_fn(CLP_LSHIFT,x2,one,false);
+	PRINT_CLP(x2);
+	printf("\n");
+	x2.u=((MAX_32BIT_DATA)/x2.d)*x2.d+x2.l;
+	PRINT_CLP(x2);
+	printf("... w\n");
+		x2=clp_fn(CLP_UNION,x1,x2,false);
+		x2=clp_fn(CLP_LSHIFT,x2,one,false);
+	PRINT_CLP(x2);
+	printf("\n");*/
+
+
+	clp_t x3;
+	clp_t x4,x5;
+	FILL_CLP(x1,0x10000,0x10000,1);
+	FILL_CLP(x5,31,31,1);
+/*	for(int i=0;i<32;i++){
+		fprintf(stderr,"i=%d :",i);
+		x2=clp_fn(CLP_UNION,x1,x2,false);
+		fprintf(stderr,"union..");
+		PRINT_CLP(x2);
+		x3=clp_fn(CLP_LSHIFT,x2,one,false);
+		fprintf(stderr,"lshift..");
+		PRINT_CLP(x3);
+		x4=clp_fn(CLP_RSHIFT,x2,x5,false);
+		fprintf(stderr,"rshift..");
+		PRINT_CLP(x4);
+		x2=clp_fn(CLP_OR,x3,x4,false);
+		fprintf(stderr,"or..");
+		PRINT_CLP(x2);
+		printf("\n");
+		if(i==2) break;
+	}
+
+	FILL_CLP(x2,x2.l,((MAX_P-x2.u)/x2.d)*x2.d+x2.u,x2.d);
+	printf(" ... w\n");
+	PRINT_CLP(x2);
+		x2=clp_fn(CLP_UNION,x1,x2,false);
+		fprintf(stderr,"union..");
+		PRINT_CLP(x2);
+		x3=clp_fn(CLP_LSHIFT,x2,one,false);
+		fprintf(stderr,"lshift..");
+		PRINT_CLP(x3);
+		x4=clp_fn(CLP_RSHIFT,x2,x5,false);
+		fprintf(stderr,"rshift..");
+		PRINT_CLP(x4);
+		x2=clp_fn(CLP_OR,x3,x4,false);
+		fprintf(stderr,"or..");
+		PRINT_CLP(x2);
+		printf("\n");
+
+	FILL_CLP(x2,x2.l,((MAX_32BIT_DATA)/x2.d)*x2.d+x2.l,x2.d);
+	printf("... w\n");
+	PRINT_CLP(x2);
+		x2=clp_fn(CLP_UNION,x1,x2,false);
+		fprintf(stderr,"union..");
+		PRINT_CLP(x2);
+		x3=clp_fn(CLP_LSHIFT,x2,one,false);
+		fprintf(stderr,"lshift..");
+		PRINT_CLP(x3);
+		x4=clp_fn(CLP_RSHIFT,x2,x5,false);
+		fprintf(stderr,"rshift..");
+		PRINT_CLP(x4);
+		x2=clp_fn(CLP_OR,x3,x4,false);
+		fprintf(stderr,"or..");
+		PRINT_CLP(x2);
+		printf("\n");
+
+	PRINT_CLP(x2);
+	printf("\n");*/
+
+	FILL_CLP(x2,0x20000,((MAX_32BIT_DATA)/0x20000)*0x20000+0x20000,0x20000);
+	PRINT_CLP(x2);
+		x2=clp_fn(CLP_UNION,x1,x2,false);
+		fprintf(stderr,"union..");
+		PRINT_CLP(x2);
+		x3=clp_fn(CLP_LSHIFT,x2,one,false);
+		fprintf(stderr,"lshift..");
+		PRINT_CLP(x3);
+		x4=clp_fn(CLP_RSHIFT,x2,x5,false);
+		fprintf(stderr,"rshift..");
+		PRINT_CLP(x4);
+		x2=clp_fn(CLP_OR,x3,x4,false);
+		fprintf(stderr,"or..");
+		PRINT_CLP(x2);
+		printf("\n");
+
+
+	return 0;
+}

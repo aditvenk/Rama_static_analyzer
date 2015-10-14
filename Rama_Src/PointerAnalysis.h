@@ -469,7 +469,12 @@ class abstractDom {
       // Each entry in this vector represents a thread
       SetabstractDomVec_t abstractDomain; 
   };
-        
+  
+  typedef std::set <op_info*> op_info_set;
+  typedef std::set < SetabstractDom_t >  set_SetAbstractDom;
+  typedef std::vector <op_info*> op_info_vec;
+  typedef std::vector<op_info>  op_info_struct_vec;
+      
   // Equivalent to printCode class in Gagan's code
   class FunctionAnalysis : public FunctionPass {
     public:
