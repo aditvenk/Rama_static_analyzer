@@ -2,10 +2,6 @@
 #include "llvm/IR/CallSite.h"
 
 #include "llvm/Support/CommandLine.h"
-#include <iostream>
-#include <set>
-#include <vector>
-
 using namespace llvm;
 using namespace std;
 using namespace Rama;
