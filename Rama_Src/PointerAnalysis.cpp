@@ -17,8 +17,8 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
   string fnName = F.getName().str();
   cerr <<"processFunction called on "<<fnName<<endl;
 
-  op_info_vec* perInstrOpInfo = new op_info_vec;
-  abstractInit();
+  // op_info_vec* perInstrOpInfo = new op_info_vec;
+  // abstractInit();
 
   return false;
 }
