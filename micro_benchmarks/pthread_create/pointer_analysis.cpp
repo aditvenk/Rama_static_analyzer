@@ -23,8 +23,9 @@ void* workerFunction (void* args) {
 
 int main() {
   worker_args_t wargs[2];
-  wargs[0].tid = 0;
-  wargs[1].tid = 1;
+  for (int i=0; i<2; i++) {
+    wargs[i].tid = i;
+  }
   
   for (int i=0; i<2; i++) {
     pthread_create(&t[i], NULL, &workerFunction, (void*) &wargs[i]);
