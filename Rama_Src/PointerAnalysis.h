@@ -541,7 +541,7 @@ class abstractDom {
       // all function analysis goes here
       bool analyzeFunctions(Module &M);
 
-      // stuff for each function
+      // per module callback to be registered with llvm
       bool runOnModule(Module &M) {
         cerr << "Module " << M.getModuleIdentifier() << endl;
         analyzeFunctions (M);
