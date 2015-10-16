@@ -1,10 +1,23 @@
 #include "PointerAnalysis.h"
 #include "llvm/IR/CallSite.h"
-
+#include "llvm/IR/CFG.h"
 #include "llvm/Support/CommandLine.h"
+
+#include <sstream>
+
 using namespace llvm;
 using namespace std;
 using namespace Rama;
+
+typedef std::map <Instruction*, op_info*> InstrToInfoMap;
+typedef std::map <std::string, op_info*> OpToInfoMap;
+typedef std::map <Instruction*, std::string> InstrToNameMap;
+
+InstrToNameMap instr_map;
+InstrToInfoMap info_map;
+OpToInfoMap operand_map;
+int instr_count;
+
 
 /* Register Passes with LLVM */
 char PointerAnalysis::ID = 0;
@@ -13,13 +26,169 @@ static RegisterPass<PointerAnalysis> X("rama", "Multi-threaded pointer analyzer"
 char FunctionAnalysis::ID = 0;
 static RegisterPass<FunctionAnalysis> Y("rama_functions", "Rama function analysis", true, false);
 
+// this function is called on each High Level Function -- i.e. Main and each WorkerThreadFunction
 bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second arg is true if F will be executed by a single flow of control
   string fnName = F.getName().str();
   cerr <<"processFunction called on "<<fnName<<endl;
 
-  // op_info_vec* perInstrOpInfo = new op_info_vec;
-  // abstractInit();
+  int instr_count = 0;
+  int sub_instr_count = 0;
 
+  bool has_changed = true;
+  int num_passes = 0;
+  bool isNonNumInstr;
+
+  op_info_vec* perInstrOpInfo = new op_info_vec;
+  abstractInit();
+
+  while (has_changed == true) {
+    // clear up the read and write sets of this function at the start of each iteration
+    // since abstractCompute will attempt to populate it every time. 
+
+    rd_set.clear();
+    wr_set.clear();
+
+    assert ( num_passes <= NUM_TRIALS /* + POST_WIDEN_TRIALS */); // TODO - implement post-widen
+
+    has_changed = false;
+    for (Function::iterator i = F.begin(); i != F.end(); i++) {
+      cerr << "BASIC BLOCK: "<<(*i).getName().str() << "\n";
+    
+      // TODO - find out what is a landing pad basic block
+      if ( i->isLandingPad() ) {
+        cerr << "This is a landing pad basic block \n";
+      }
+      
+      // before we go over each instruction in the bb, we need to set up bb maps.
+
+      std::vector <BasicBlock*> *i_pred = new std::vector <BasicBlock*>;
+
+      for (pred_iterator I = pred_begin(i), E = pred_end(i); I != E; ++I) {
+        cerr << "PREDECESSOR = "<< (*I)->getName().str() << "\n";
+        i_pred->push_back(*I);
+      }
+
+      bbStart (i, i_pred); // TODO - what does this function do?
+
+      for (BasicBlock::iterator b = (*i).begin(); b != (*i).end(); b++) {
+	      // If the instruction is of no interest to us skip its processing
+	      if ( (*b).getOpcode ( ) == Instruction::Unreachable ) {
+	        cerr << "Found unreachable instr\n";
+	        continue;
+	      }
+        
+        // reset the operand info vector
+        perInstrOpInfo->clear();
+        isNonNumInstr = false;
+        
+        // We will assign numbers to each instruction to match the llvm-dis output
+	      // So first identify the instruction to which llvm-dis does not assign a number
+	      if (   ((*b).getOpcode ( ) == Instruction::Store)
+	           | ((*b).getOpcode ( ) == Instruction::Br)
+	           | ((*b).getOpcode ( ) == Instruction::Alloca)
+	           | (( ((*b).getOpcode ( ) == Instruction::BitCast) & (instr_count == 0) ))
+	           | ((*b).getOpcode ( ) == Instruction::Ret)
+	           | ((*b).getOpcode ( ) == Instruction::PHI)
+	         ) {
+	        isNonNumInstr = true;
+	      }
+    
+        // First check whether we have already encountered this instruction .
+	      // If yes then retrive its op_info_vec, else 
+	      // Allocate a new op_info structure and insert in the info_map
+
+        InstrToInfoMap::iterator iit = info_map.find((Instruction *)&*(b));
+        op_info* op_info_struct; // Holds the op_info_vec for this instruction
+        if (iit == info_map.end()) { // not in info map
+          // Prepare to log the instruction in instr_map and info_map
+	        std::stringstream out;
+	        out << instr_count;
+	        if ( isNonNumInstr == true ) {
+	          out << "." << sub_instr_count;
+	          sub_instr_count++;
+	        }
+	        std::string instrName = "%" + fnName + "#" +  out.str ();
+	        op_info_struct = new op_info;
+	        op_info_struct->isInstruction = true;
+	        std::string instr_name = (*b).getName ().str();
+	        if (instr_name.find ("tid") != std::string::npos) {
+	          op_info_struct->isTID = true;
+	          cerr << "Found TID instr";
+	        }
+          
+	        // (*b) is the pointer to the instruction
+	        info_map [b] = op_info_struct;
+	        instr_map [b] = instrName; //_count;
+
+	        if ((*b).getOpcode ( ) == Instruction::Alloca) { 
+	          //cerr << "Found alloca";
+	          // std::string name = "%" + fnName + "#";
+	          // name = name + out.str();
+            // op_info_struct->name = name;
+            op_info_struct->name = instrName;
+	          op_info_struct->isAlloca = true;
+	        }
+	        if ((*b).getOpcode ( ) == Instruction::Call) { 
+	          //cerr << "Found Call: " << (*b).getOpcodeName () << "\n";
+	          // std::string name = "%" + fnName + "#";
+	          // name = name + out.str();
+	          // op_info_struct->name = name;
+            op_info_struct->name = instrName;
+	          op_info_struct->isCall = true;
+	        }
+	        if (isNonNumInstr == false) {
+	          instr_count++;
+	          sub_instr_count = 0;
+	        }
+        }  
+        else {
+	        op_info_struct = iit->second;
+	        // Now check whether the instruction is in our instr_map
+	        // If not then we need to put it in
+	        InstrToNameMap::iterator map_iter = instr_map.find((Instruction *)&*(b));
+	        if (map_iter == instr_map.end()) {
+            cerr << "BAD BAD BAD BAD "<<endl;
+	          std::stringstream out;
+	          out << instr_count;
+	          if ( isNonNumInstr == true ) {
+	            out << "." << sub_instr_count;
+	            sub_instr_count++;
+	          }
+	          std::string instrName = "%" + fnName + "#" + out.str ();
+	          instr_map [b] = instrName; 
+	          if (isNonNumInstr == false) {
+	            instr_count++;
+	            sub_instr_count = 0;
+	          }
+	        }
+	      }
+        // Print out instruction
+	      cerr << instr_map[b] << ":" << "\t" << (*b).getOpcodeName () << "\n";
+	      unsigned opcode = (*b).getOpcode(); // Holds the opcode of the instruction
+        
+        // If it is a cmp instruction extract the predicate
+	      llvm::CmpInst::Predicate cmp_pred;
+	      if (isa <ICmpInst> (*b)) {
+	        cmp_pred = ((ICmpInst *)&* (b))->getSignedPredicate();
+	      }
+
+	      if (opcode == Instruction::Alloca) { 
+	        //cerr << "Found alloca";
+	        AllocaInst* a_inst = dyn_cast<AllocaInst> (b);
+	        //cerr << "operand name = " << op_info_struct->name << (a_inst->getArraySize())->getName();
+	        //cerr << "array size = " << (a_inst->getAllocatedType())->getArrayNumElements();
+	        (a_inst->getArraySize())->dump();
+	        //cerr << "\n";
+	        //if (isa<Constant> (a_inst->getArraySize()) ) {
+	        //  cerr << "val = " << (a_inst->getArraySize())->getIntegerValue();
+	        //}
+	      }
+
+      }
+      
+    }
+    has_changed = false; //TODO - remove this --> AV Hack
+  }
   return false;
 }
 

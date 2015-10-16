@@ -11,6 +11,7 @@ if(WIN32 OR CYGWIN)
 endif()
 
 add_llvm_loadable_module( LLVMPointerAnalysis
+  clp/clp.cpp
   abstractInterpret.cpp
   PointerAnalysis.cpp
 

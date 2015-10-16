@@ -18,7 +18,12 @@
 using namespace llvm;
 using namespace std;
 
+// global macros go here
 #define DEBUG_TYPE "PointerAnalysis"
+#define NUM_THREADS   1
+#define NUM_TRIALS    1000
+#define POST_WIDEN_TRIALS   1000
+
 
 // Rama - a multi-threaded pointer analyzer built by Aditya Venkataraman and Naveen Neelakantan
 
@@ -474,7 +479,8 @@ class abstractDom {
   typedef std::set < SetabstractDom_t >  set_SetAbstractDom;
   typedef std::vector <op_info*> op_info_vec;
   typedef std::vector<op_info>  op_info_struct_vec;
-      
+
+        
   // Equivalent to printCode class in Gagan's code
   class FunctionAnalysis : public FunctionPass {
     public:
@@ -488,16 +494,39 @@ class abstractDom {
         return false;
       }
 
+      virtual void print (std::ostream &O, const Module *M) const {
+        O << "This is FunctionAnalysis\n";
+      }
+
       virtual void getAnalysisUsage(AnalysisUsage &AU) const {
         // we don't modify the program, so we preserve all analyses
         AU.setPreservesAll();
       }
+      
+      void computeConflicts();
 
       void setName (string name) { this->name = name; }
     
     private:
-      string name;
 
+      void printOpInfo (op_info*);
+      void printOpInfoSet ( std::set <SetabstractDomVec_t> &);
+      void printAbstractInfo (abstractDom&);
+
+      bool abstractCompute (BasicBlock*, unsigned, llvm::CmpInst::Predicate, op_info*, op_info_vec*, bool);
+      void abstractInit();
+      void bbStart (BasicBlock*, std::vector <BasicBlock*>*);
+      void abstractWiden(abstractDom &);
+      void abstractWidenMemory();
+      void addToReadSet ( SetabstractDomVec_t &);
+      void addToWriteSet ( SetabstractDomVec_t &);
+
+      string name;
+      std::set < SetabstractDomVec_t > rd_set;
+      std::set < SetabstractDomVec_t > wr_set;
+      SetabstractDom_t rd_wr_conflicts;
+      SetabstractDom_t wr_wr_conflicts;
+      
   };
 
   // PointerAnalysis - equivalent to abstractAnalysis class in Gagan's code
