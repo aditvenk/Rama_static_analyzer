@@ -443,12 +443,84 @@ class abstractDom {
       {
         abstractDomain.clear(); 
       }
+      
+      op_info (SetabstractDomVec_t ip) {
+        *this=op_info();
+        this->abstractDomain = ip;
+      }
 
       ~op_info() {}
 
+      op_info& operator=(const op_info &rhs) {
+        isTID=rhs.isTID;
+        value=rhs.value;
+        valueFP=rhs.valueFP;
+        size=rhs.size;
+        width=rhs.width;
+        name=rhs.name;
+        
+        BasicBlockPtr=rhs.BasicBlockPtr;
+        FunctionPtr=rhs.FunctionPtr;
+        isLiteral=rhs.isLiteral;
+        isFixedPoint=rhs.isFixedPoint;
+        isInstruction=rhs.isInstruction;
+        isBasicBlockPtr=rhs.isBasicBlockPtr;
+        isFunctionPtr=rhs.isFunctionPtr;
+        isPointer=rhs.isPointer;
+        isAlloca=rhs.isAlloca;
+        isCall=rhs.isCall;
+        
+        auxilliary_op=rhs.auxilliary_op;
+        
+        abstractDomain = rhs.abstractDomain;
+        
+        try_widen = rhs.try_widen;
+        return *this;
+      }
+    
+      op_info (const op_info &rhs) {
+        *this=rhs;
+      }
+      
+      void print ( ) {
+        abstractDomain.print ( );
+      }
+
+      void pushToDomVec (abstractDom ip) {
+        abstractDomain.push_back (ip);
+      }
+
+      op_info binary_op (clp_op_t op, const op_info &rhs2) {
+        return abstractDomain.binary_op ( op, rhs2.abstractDomain  );
+      }
+
+      op_info operator + (const op_info &rhs2) {
+        return binary_op (CLP_ADD, rhs2);
+      }
+
+      op_info operator - (const op_info &rhs2) {
+        return binary_op (CLP_SUB, rhs2);
+      }
+
+      op_info operator * (const op_info &rhs2) {
+        return binary_op (CLP_MULT, rhs2);
+      }
+
+      op_info operator / (const op_info &rhs2) {
+        return binary_op (CLP_DIV, rhs2);
+      }
+
+     
+      // This function gives a cross-thread intersection. 
+      // abstractDomVec is vector in which each element represents a thread. Each thread
+      // has a set of abstractDomains.
+      SetabstractDom_t crossVec_intersect (op_info& ip) {
+        return abstractDomain.crossVec_intersect (ip.abstractDomain);
+      }
+
       bool isTID;
       int value;
-      double valueFP; // TODO - AV - is this needed?
+      double valueFP; 
       int size;
       int width;
       string name;

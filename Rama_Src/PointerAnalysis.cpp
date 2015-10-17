@@ -1,6 +1,8 @@
 #include "PointerAnalysis.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/CFG.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/Type.h"
 #include "llvm/Support/CommandLine.h"
 
 #include <sstream>
@@ -184,9 +186,180 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 	        //}
 	      }
 
-      }
-      
-    }
+        for (User::op_iterator operand = (*b).op_begin(); operand != (*b).op_end(); operand++) {
+          cerr << "Name = " << (*operand)->getName().str() << " Type = " << (*operand)->getType ()<<endl;
+          // Find out interesting details about this operand
+	        // First find the width of the "eventual" data in the operand.
+	        unsigned widthInBits;
+	        unsigned width;
+	    
+	        // Should really first check whether this is a primitive type operand before checking its width
+	        const Type* dataType = (*operand)->getType();
+	        widthInBits = dataType->getPrimitiveSizeInBits();
+
+	        // If the type is of pointer then we need to find the data type it points to
+	        if ( dataType->getTypeID() == Type::PointerTyID ) {
+	          dataType = dataType->getContainedType (0);
+	          // If the type is a pointer to a pointer then we need to find the data type it points to
+	          if (dataType->getTypeID() == Type::PointerTyID) {
+	            dataType = dataType->getContainedType(0);
+	          }
+	          
+            // if the type is a pointer to an array we need to find the type of the array elements
+	          if ( dataType->getTypeID() == Type::ArrayTyID ) {
+	            cerr << " ** Found Array ** " <<endl;
+	            //cerr << (((ArrayType *)&*((*operand)->getType()->getContainedType(0)))->getElementType ())->getTypeID ();
+	            dataType = ( (ArrayType *)&*(dataType) )->getElementType ();
+	            //cerr << width;
+	          }
+
+	          widthInBits = dataType->getPrimitiveSizeInBits();
+
+	          // If the operand is a structure then we need to go through the elements to compute
+	          // its size. But we need to do this recurseively for any structs contained within.
+	          // For now we assume there are no structs inside.
+	      
+	          if ( dataType->getTypeID() == Type::StructTyID ) {
+		          unsigned numElements = dataType->getNumContainedTypes ();
+		          unsigned z;
+		          for (z = 0; z < numElements; z++) {
+		            widthInBits += dataType->getContainedType(z)->getPrimitiveSizeInBits();
+		          }
+            }
+          }
+	        
+          width = (unsigned) ceil ( (float) ( widthInBits )/8 ); // width of the operand in Bytes
+          cerr << "width(Bytes) = "<< width << " width(Bits) = "<<widthInBits<<endl;
+          
+          // every virtual register operand is of type Instruction and points to the instruction which generates it.
+          if (isa <Instruction> (*operand)){
+	          InstrToNameMap::iterator map_iter = instr_map.find((Instruction *)&*(*operand)); 
+	          if (map_iter == instr_map.end()) {
+		          cerr << " IOpNotInMapYet" <<endl;
+	          }
+            else {
+		          cerr << "Instr found - " << map_iter->second <<endl;
+	          }
+	      
+	          InstrToInfoMap::iterator InfoMap_iter = info_map.find((Instruction *)&*(*operand));
+	          if (InfoMap_iter == info_map.end()) {
+	  	        //cerr << "Not in info_map ";
+		          // Allocate 
+		          op_info* temp_op_info = new op_info;
+		          temp_op_info->isInstruction = true;
+		          temp_op_info->width = width;
+		          // if the instruction was Alloca, i.e. the operand is an array then set that flag
+		          if ( ((Instruction *)&*(*operand))->getOpcode () == Instruction::Alloca) {
+		            temp_op_info->isAlloca = true;
+		          }
+		          info_map [(Instruction *)&*(*operand)] = temp_op_info;
+		          perInstrOpInfo->push_back (temp_op_info);
+            } 
+            else {
+		          InfoMap_iter->second->width = width;
+	            //cerr << "*" << (InfoMap_iter->second)->width << "*";
+		          perInstrOpInfo->push_back(InfoMap_iter->second);
+	          }
+          }
+          // TODO - why is this code needed? 
+          /*
+          else {
+            if (((*operand)->hasName () | isa<Value> (*operand)) & (strcmp((*b).getOpcodeName (), "store") != 0)) {
+              cerr << " " << (*operand)->getName();
+            } else {
+              cerr << " XXX";
+            }
+          }
+          */
+          else if (isa<ConstantInt> (*operand)) {
+		        op_info* temp_op_info = new op_info;
+		        temp_op_info->isLiteral = true;
+		        temp_op_info->value = ((ConstantInt *)&*(*operand))->getZExtValue();
+		        temp_op_info->width = width;
+		        perInstrOpInfo->push_back (temp_op_info);
+		        cerr << "Const " << temp_op_info->value <<endl;
+          } 
+          else if (isa<BasicBlock> (*operand)) {
+		        op_info* temp_op_info = new op_info;
+		        temp_op_info->isBasicBlockPtr = true;
+		        temp_op_info->BasicBlockPtr = (BasicBlock *)&*(*operand);
+		        temp_op_info->width = width;
+		        perInstrOpInfo->push_back (temp_op_info);
+		        cerr << "BB " << (*operand)->getName().str()<<endl;
+          } 
+          else if ((*operand)->getType()->getTypeID() == Type::PointerTyID) { // operand is a ptr
+            cerr << " @" << (*operand)->getName ().str() <<endl;
+            OpToInfoMap::iterator OpMap_iter = operand_map.find( (*operand)->getName () );
+	            
+            if (OpMap_iter == operand_map.end()) {
+              // Following seems to get the type of data the pointer is pointing to
+		          cerr << " " << (*operand)->getType()->getTypeID() << " CT = " << ((*operand)->getType()->getContainedType(0))->getTypeID() << " width = " << ((*operand)->getType()->getContainedType(0))->getPrimitiveSizeInBits() <<endl;
+              int size = 1;
+		          bool isArray = false;
+		          
+              if (((*operand)->getType()->getContainedType(0))->getTypeID() == Type::ArrayTyID) {
+		            cerr << " ** Found Array ** "<<endl;
+		            isArray = true;
+		            size = ((ArrayType *)&*((*operand)->getType()->getContainedType(0)))->getNumElements();
+              }
+		          // Allocate 
+		          op_info* temp_op_info = new op_info;
+		          temp_op_info->isPointer = true;
+		          temp_op_info->name = (*operand)->getName ();
+		          temp_op_info->width = width;
+		          temp_op_info->size = size;
+		          temp_op_info->isArray = isArray;
+		          operand_map [(*operand)->getName ()] = temp_op_info;
+		          perInstrOpInfo->push_back (temp_op_info);
+	                
+            } 
+            else {
+		          perInstrOpInfo->push_back(OpMap_iter->second);
+            }
+          }
+          else if (((*operand)->getName ()).find ("tid") != std::string::npos) {
+            op_info* temp_op_info = new op_info;
+		        temp_op_info->isTID = true;
+		        temp_op_info->name = "tid";
+		        temp_op_info->width = width;
+		        perInstrOpInfo->push_back (temp_op_info);
+		        cerr << " Found tid operand"<<endl;
+          }
+          else if ( isa<ConstantFP> (*operand) ) {
+            op_info* temp_op_info = new op_info;
+			      temp_op_info->isLiteral = true;
+			      temp_op_info->isFixedPoint = false;
+			      temp_op_info->width = width;
+			      const fltSemantics * FPtype = &((ConstantFP *)&*(*operand))->getValueAPF().getSemantics();
+			      if ( FPtype == (const llvm::fltSemantics*)&llvm::APFloat::IEEEdouble ) {
+			        temp_op_info->valueFP = ((ConstantFP *)&*(*operand))->getValueAPF().convertToDouble();
+			      } else {
+			        if ( FPtype == (const llvm::fltSemantics*) &llvm::APFloat::IEEEsingle ) {
+			          temp_op_info->valueFP = ((ConstantFP *)&*(*operand))->getValueAPF().convertToFloat();
+			        } else {
+			          cerr << "Found Float that is not of type double, nor of type single. valueFP = 0.0\n";
+			        }
+			      }
+			      perInstrOpInfo->push_back (temp_op_info);
+          }
+          else {
+			      op_info* temp_op_info = new op_info;
+			      perInstrOpInfo->push_back (temp_op_info);
+			      cerr << (*operand)->getName ().str() << ": Found an operand that is not instruction/literal/basic block/tid. Skipping " <<endl;
+			      (*operand)->getType()->dump();
+			      cerr << (*operand)->getType()->getStructName().str() << (*operand)->getType()->getTypeID() << " " << "\n"; //(*operand)->getType()->getContainedType(0) <<"\n";
+			      //cerr << "\n";
+			      //exit (-1);
+			      continue;
+		      }
+        } // for (User::op_iterator ...) Iterate over all the operands of the instruction
+        cerr << " Total OPs = " << perInstrOpInfo->size() <<endl;
+
+        // Call the abstractCompute function
+    	  bool result = abstractCompute (i, opcode, cmp_pred, op_info_struct, perInstrOpInfo, isSerial);
+
+      } // for (BasicBlock iterator ...) Iterate over all the instructions of the BB
+    } // for (FunctionIterator ...) Iterate over all BBs of the Function
     has_changed = false; //TODO - remove this --> AV Hack
   }
   return false;
@@ -229,7 +402,7 @@ bool PointerAnalysis::analyzeFunctions(Module &M) {
 
   bool changed = true;
   while (changed == true) {
-    changed = mainF.processFunction ( *(M.getFunction ("main")) , true);
+    changed = mainF.processFunction ( *(M.getFunction ("main")) , true); // isSerial = true
     cerr << "changed = "<<changed<<endl;
     changed = false; //FIXME
   }
