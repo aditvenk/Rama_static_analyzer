@@ -25,10 +25,20 @@ using namespace std;
 #define POST_WIDEN_TRIALS   1000
 
 
-// Rama - a multi-threaded pointer analyzer built by Aditya Venkataraman and Naveen Neelakantan
+// Rama - a multi-threaded pointer analyzer built by Aditya Venkataraman and Naveen Neelakandan
 
 namespace Rama {
-  
+/* 
+ * This namespace contains the following class definitions
+ * 
+ * abstractDom - A wrapping around the CLP data structure with an added name(string)
+ * SetabstractDom_t - A std::set of abstracDom
+ * SetabstractDomVector_t - A std::vector of SetabstractDom. Each entry in this vector represents the set of abstract domains that could arise in an individual thread. 
+ * 
+ * FunctionAnalysis - A per function analysis pass 
+ * PointerAnalysis - A per module analysis pass
+ *
+ * */  
 class abstractDom {
   public:
     
@@ -554,6 +564,7 @@ class abstractDom {
 
         
   // Equivalent to printCode class in Gagan's code
+  // Performs per function analysis to compute an abstraction over the set of states that can arise during the execution of the function
   class FunctionAnalysis : public FunctionPass {
     public:
       static char ID; 
@@ -602,20 +613,22 @@ class abstractDom {
   };
 
   // PointerAnalysis - equivalent to abstractAnalysis class in Gagan's code
+  // Outer level analysis class that gets called on the entire module(program)
   class PointerAnalysis : public ModulePass {
     private:
-      // initial stuff
+      // initial stuff - we don't do anything currently
       bool doInitialization(Module &M);
 
-      // clean up after all module runs
+      // clean up after all module runs - we don't do anything currently
       bool doFinalization(Module &M);
       
-      // all function analysis goes here
+      // performs a function by function analysis using the FunctionAnalysis object
       bool analyzeFunctions(Module &M);
 
       // per module callback to be registered with llvm
       bool runOnModule(Module &M) {
         cerr << "Module " << M.getModuleIdentifier() << endl;
+	// make a call to the function by function analysis
         analyzeFunctions (M);
         return false;
       }
