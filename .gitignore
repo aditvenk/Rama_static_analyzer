@@ -1,0 +1,14 @@
+CMakeLists.txt
+Hello/
+IPO/
+InstCombine/
+Instrumentation/
+LLVMBuild.txt
+Makefile
+ObjCARC/
+Scalar/
+Utils/
+Vectorize/
+micro_benchmarks/pthread_create/*.ll
+micro_benchmarks/pthread_create/*.bc
+micro_benchmarks/pthread_create/*.opt
