@@ -360,11 +360,77 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 
         // Call the abstractCompute function
     	  bool result = abstractCompute (i, opcode, cmp_pred, op_info_struct, perInstrOpInfo, isSerial);
+        has_changed |= result;
+	      cerr << " (changed = " << result;
+	      cerr << ")   ";
+	      op_info_struct->print();
+	      cerr << "\n";
 
+	      //Need to clear up the perInstrOpInfo vector here
+	      unsigned k;
+	      unsigned size = perInstrOpInfo->size();
+	      
+	      for (k = 0; k < size; k++) {
+	        if ( ((*perInstrOpInfo)[k]->isInstruction == true) |
+	             ((*perInstrOpInfo)[k]->isPointer == true)
+	           ) {
+	          //Do nothing - we have to keep this information around
+	        } else {
+	          delete (*perInstrOpInfo)[k];
+	        }
+	      }
       } // for (BasicBlock iterator ...) Iterate over all the instructions of the BB
     } // for (FunctionIterator ...) Iterate over all BBs of the Function
-    has_changed = false; //TODO - remove this --> AV Hack
+    
+    first_pass = false;
+    num_passes++;
+
+      
+    // If we have iterated over the code for more than the specified number of times then it is time
+    // to widen the ranges and bring the analysis to closure. So we'll initiate a special procedure as
+    // below. After this we should be terminating.
+      
+    if ((num_passes == NUM_TRIALS)&&(!widened)) {
+      // Widen the range of each op_info in our map
+	    InstrToInfoMap::iterator InfoMap_iter;
+	    for (InfoMap_iter = info_map.begin (); InfoMap_iter != info_map.end (); InfoMap_iter++) {
+	      op_info* oi_struct = InfoMap_iter->second;
+	      if(!oi_struct->try_widen) continue;
+	      for (unsigned l = 0; l < oi_struct->abstractDomain.setabstractDomVec.size(); l++) {
+	        std::set<abstractDom, abstractDomCompare>::iterator ait;
+	    	  SetabstractDom_t temp;
+	        for (ait = oi_struct->abstractDomain.setabstractDomVec[l].SetabstractDom.begin (); ait != oi_struct->abstractDomain.setabstractDomVec[l].SetabstractDom.end (); ait++) {
+	          abstractDom aD = (*ait);
+	          abstractWiden ( aD );
+	    	    temp.insert(aD);
+	        }
+	    	  oi_struct->abstractDomain.abstractDomVec[l]=temp;
+	      }
+      }
+      abstractWidenMemory ();
+      widened=true;
+    }
   }
+  
+  //Go through the info_map
+  printInfoMap();
+  cerr << "Read Set: \n"; 
+  printOpInfoSet (rd_set);
+  cerr << "Write Set:\n";
+  printOpInfoSet (wr_set);
+  
+  cerr << "Number of passes = " << num_passes << "\n";
+    
+  // If we had to abstractCompute for num_passes > 1, then things had changed, so
+  // we need to convey that back - so that this entire process can be repeated for
+  // the entire program
+  if (num_passes > 1) {
+    return true;
+  } 
+  else {
+    return false;  
+  }
+
   return false;
 }
 

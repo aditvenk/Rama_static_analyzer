@@ -56,11 +56,11 @@ void FunctionAnalysis::bbStart (BasicBlock* cur_ptr, std::vector<BasicBlock*> *p
 	abstractMem temp;
   
   if(abstractConstraintMapIn.find(cur_ptr)!=abstractConstraintMapIn.end()) {
-		abstractConstraintMap[cur_ptr]=abstractConstraintMapIn[cur_ptr];
-		abstractConstraintMapIn.erase(cur_ptr);
+		abstractConstraintMap[cur_ptr]=abstractConstraintMapIn[cur_ptr]; // if constraints are coming in, we copy them into aCMap. 
+		abstractConstraintMapIn.erase(cur_ptr); // remove constraints from aCMin. 
 	}
 	else {
-		abstractConstraintMap.erase(cur_ptr);
+		abstractConstraintMap.erase(cur_ptr); // no constraints coming in, so no constraints in acM
 	}
 
 	if(TIDConstraintMapIn.find(cur_ptr)!=TIDConstraintMapIn.end()) {
@@ -72,6 +72,7 @@ void FunctionAnalysis::bbStart (BasicBlock* cur_ptr, std::vector<BasicBlock*> *p
 	}
 }
 
+/*
 void addConstraint(BasicBlock *basic_block_ptr,op_info *dst_ptr,abstractDomVec_t range) {
 	if((abstractConstraintMap.find(basic_block_ptr)==abstractConstraintMap.end()) ||
 	   ((abstractConstraintMap[basic_block_ptr]).find(dst_ptr)==(abstractConstraintMap[basic_block_ptr]).end())
@@ -82,8 +83,11 @@ void addConstraint(BasicBlock *basic_block_ptr,op_info *dst_ptr,abstractDomVec_t
 		((abstractConstraintMap[basic_block_ptr])[dst_ptr])=((abstractConstraintMap[basic_block_ptr])[dst_ptr]).binary_op(CLP_INTERSECT,range);
 	}
 }
+*/
 
 op_info applyConstraint(BasicBlock *basic_block_ptr,op_info *dst_ptr,op_info value) {
+  
+  // applyConstraint applies the constraints for this BB in the aCM and TIDCM on 'value' and creates a op_info*
 
 	assert(basic_block_ptr);
 
@@ -96,32 +100,99 @@ op_info applyConstraint(BasicBlock *basic_block_ptr,op_info *dst_ptr,op_info val
 
 	op_info result=value;	// to preserve the other boolean fields
 
-	std::map<op_info *,abstractDomVec_t>::iterator iter;
+	std::map<op_info *,SetabstractDomVec_t>::iterator iter;
 
 	if(abstractConstraintMap.find(basic_block_ptr)!=abstractConstraintMap.end()) {
 		if((iter=(abstractConstraintMap[basic_block_ptr]).find(dst_ptr))!=(abstractConstraintMap[basic_block_ptr]).end()) {
 			for(unsigned int i=0;i<numThreads;i++) {
-				result.abstractDomain.abstractDomVec[i]=
-				(*iter).second.abstractDomVec[i].binary_op(CLP_INTERSECT,value.abstractDomain.abstractDomVec[i]);
+				result.abstractDomain.setabstractDomVec[i]=
+				(*iter).second.setabstractDomVec[i].binary_op(CLP_INTERSECT,value.abstractDomain.setabstractDomVec[i]);
 			}
 		}
 	}
 
-	if(result.abstractDomain.abstractDomVec.size()<numThreads)
+	if(result.abstractDomain.setabstractDomVec.size()<numThreads)
 		return result;
 
 	if(TIDConstraintMap.find(basic_block_ptr)!=TIDConstraintMap.end()) {
 		for(unsigned int i=0;i<numThreads;i++) {
-			if(!(TIDConstraintMap[basic_block_ptr] & (1<<i))) {
+			if(!(TIDConstraintMap[basic_block_ptr] & (1<<i))) { // if this thread won't execute this BB, we don't care about abstract constraints for this value on this thread
 				clp_t x;
 				CLEAR_CLP(x);
-				result.abstractDomain.abstractDomVec[i]=abstractDom(x);
+				result.abstractDomain.setabstractDomVec[i]=abstractDom(x);
 			}
 		}
 	}
 
 	return result;
 }
+
+void computeConstraints(clp_t val, llvm::CmpInst::Predicate pred,clp_t &true_clp,clp_t &false_clp)
+{
+	if(EMPTY(val)) {
+		MAKE_TOP(true_clp);
+		MAKE_TOP(false_clp);
+		return;
+	}
+	if(((pred==llvm::CmpInst::ICMP_SGE)||
+	   (pred==llvm::CmpInst::ICMP_SLT)||
+	   (pred==llvm::CmpInst::ICMP_SGT)||
+	   (pred==llvm::CmpInst::ICMP_SLE)
+	  ) && (val.l>val.u)) {
+		MAKE_TOP(true_clp);
+		MAKE_TOP(false_clp);
+		return;
+    }
+
+	switch(pred)
+	{
+		case llvm::CmpInst::ICMP_EQ:
+			FILL_CLP(true_clp,val.l,val.u,1);
+			MAKE_TOP(false_clp);
+			break;		
+		case llvm::CmpInst::ICMP_NE:
+			MAKE_TOP(true_clp);
+			FILL_CLP(false_clp,val.l,val.u,1);
+			break;
+		case llvm::CmpInst::ICMP_UGE:
+			FILL_CLP(false_clp,0,val.u-1,1);
+			FILL_CLP(true_clp,val.l,-1,1);
+			break;
+		case llvm::CmpInst::ICMP_ULT:
+			FILL_CLP(true_clp,0,val.u-1,1);
+			FILL_CLP(false_clp,val.l,-1,1);
+			break;
+		case llvm::CmpInst::ICMP_UGT: 
+			FILL_CLP(false_clp,0,val.u,1);
+			FILL_CLP(true_clp,val.l+1,-1,1);
+			break;
+		case llvm::CmpInst::ICMP_ULE: 
+			FILL_CLP(true_clp,0,val.u,1);
+			FILL_CLP(false_clp,val.l+1,-1,1);
+			break;
+		case llvm::CmpInst::ICMP_SGE: 
+			FILL_CLP(false_clp,MAX_N,val.u-1,1);
+			FILL_CLP(true_clp,val.l,MAX_P,1);
+			break;
+		case llvm::CmpInst::ICMP_SLT: 
+			FILL_CLP(true_clp,MAX_N,val.u-1,1);
+			FILL_CLP(false_clp,val.l,MAX_P,1);
+			break;
+		case llvm::CmpInst::ICMP_SGT:
+			FILL_CLP(false_clp,MAX_N,val.u,1);
+			FILL_CLP(true_clp,val.l+1,MAX_P,1);
+			break;
+		case llvm::CmpInst::ICMP_SLE: 
+			FILL_CLP(true_clp,MAX_N,val.u,1);
+			FILL_CLP(false_clp,val.l+1,MAX_P,1);
+			break;
+		default:
+			MAKE_TOP(true_clp);
+			MAKE_TOP(false_clp);
+			break;
+	};
+}
+
 
 void propagateConstraintMap(BasicBlock* cur_ptr, BasicBlock* target_ptr, op_info* special_op=NULL, SetabstractDomVec_t *special_op_val=NULL) {
 
@@ -153,7 +224,7 @@ void propagateConstraintMap(BasicBlock* cur_ptr, BasicBlock* target_ptr, op_info
 	} 
 
 	if(special_op && !special_op_added) {
-		abstractDomVec_t x;
+		SetabstractDomVec_t x;
 		x=(*special_op_val);
 		if(abstractConstraintMapIn.find(target_ptr)==abstractConstraintMapIn.end() ||
 		  (abstractConstraintMapIn[target_ptr]).find(special_op)==(abstractConstraintMapIn[target_ptr]).end()
@@ -171,7 +242,7 @@ void propagateTIDConstraintMap(BasicBlock* cur_ptr, BasicBlock* target_ptr, int 
 
 	bool value_added=false;
 	if(TIDConstraintMap.find(cur_ptr)!=TIDConstraintMap.end()) { // if cur_ptr has an entry in TIDConstraintMap
-		if(TIDConstraintMapIn.find(target_ptr)==TIDConstraintMapIn.end()) {
+		if(TIDConstraintMapIn.find(target_ptr)==TIDConstraintMapIn.end()) { // if target_ptr has no entry in TIDCMin
 			if(value>=0) {
 				value_added=true;
 				TIDConstraintMapIn[target_ptr]=value;
@@ -289,25 +360,26 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 			p.push_back(temp);						
 		}
     else if(c_op.isBasicBlockPtr) {
-
-			if(opcode==2) { // br TODO -- fix this
+    /*
+			if(opcode==Instruction::br) { // br 
 				if(op_vec_ptr->size()==1) { // unconditional branch
-					propagateConstraintMap(basic_block_ptr,c_op.BasicBlockPtr);
+					propagateConstraintMap(basic_block_ptr,c_op.BasicBlockPtr); // propagate constraints from cur BB to target BB and exit analysis
 					propagateTIDConstraintMap(basic_block_ptr,c_op.BasicBlockPtr);
 					return false;
 				}
 				else {
-					assert(op_vec_ptr->size()==3);
-					// add true-path and false-path constraints
-					abstractDomVec_t temp_vec1, temp_vec2;
-					llvm::CmpInst::Predicate pred = (*op_vec_ptr)[2]->cmp_pred;
-					if((*op_vec_ptr)[2]->auxilliary_op) {
+					assert(op_vec_ptr->size()==3); // assert that this is a conditional branch
+					
+          // add true-path and false-path constraints
+					SetabstractDomVec_t temp_vec1, temp_vec2;
+					llvm::CmpInst::Predicate pred = (*op_vec_ptr)[0]->cmp_pred; // check operand 0 of cond br instruction, which is the condition predicate
+					if((*op_vec_ptr)[0]->auxilliary_op) {
 						for(unsigned int i=0;i<numThreads;i++) {
 							SetabstractDom_t true_constraint;
 							SetabstractDom_t false_constraint;
 							clp_t t,f;
 							std::set<abstractDom, abstractDomCompare>::iterator it;
-							SetabstractDom_t s=((*op_vec_ptr)[2]->cmp_val).abstractDomVec[i];
+							SetabstractDom_t s=((*op_vec_ptr)[0]->cmp_val).setabstractDomVec[i];
 							//cerr << "^^^^^^^\n";
 							for(it=s.SetabstractDom.begin();it!=s.SetabstractDom.end();it++) {
 								computeConstraints(it->clp,pred,t,f);
@@ -359,22 +431,21 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 			}
 			else
 				return true;
-		}
-  }
-    /*
-		else if(!(c_op.abstractDomain.abstractDomVec).size()) {
-		    op_info temp=c_op;
+    */
+    }
+		else if(!(c_op.abstractDomain.setabstractDomVec).size()) {
+		  op_info temp=c_op;
 			temp.abstractDomain.clear();
-		    for (unsigned int i = 0; i < numThreads; i++) {
+      for (unsigned int i = 0; i < numThreads; i++) {
 			  temp.pushToDomVec (abstractDom());
-		    }
+      }
 			p.push_back (temp);
 		}
 		else {
 			// copy the operand
 			p.push_back(c_op);
 		}
-	}
+	} // iterate over operands
 
 	for(unsigned int i=0;i<p.size();i++){
 		p[i]=applyConstraint(basic_block_ptr,(*op_vec_ptr)[i],p[i]);
@@ -382,182 +453,185 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 
 	// compute the result
 	switch(opcode) {
-	case 7:		// Add
-		op1=p[0]; 
-		op2=p[1]; 
-		result=op1+op2; 
-		break; 
-	case 8:		// Sub
-		op1=p[0]; 
-		op2=p[1]; 
-		result=op1-op2; 
-		break; 
-	case 9:		// Mult
-		op1=p[0]; 
-		op2=p[1]; 
-		result=op1*op2; 
-		break; 
-	case 11:	// Sdiv
-		op1=p[0]; 
-		op2=p[1]; 
-		result=op1/op2; 
-		break; 
-	case 24: // Alloca. TODO: fix allocation size
-		op1=p[0];
-		result=op1;
-		result.width=p[0].width;
-		break;
-	case 25: // Load
-		op1=p[0];
-		for(unsigned int i=0;i<numThreads;i++) {
-			int w;
-			if(op1.width)
-				w=op1.width-1;
-			else
-				w=0;
-			result.abstractDomain.abstractDomVec.push_back(loadFromMemory(basic_block_ptr,op1.abstractDomain.abstractDomVec[i]));
-			op1.abstractDomain.abstractDomVec[i]=op1.abstractDomain.abstractDomVec[i].binary_op(CLP_ADD_EXPAND,abstractDom(w,w,1));
-		}
-		//cerr << "\nLoad address = ";
-		//op1.abstractDomain.print();
-		//cerr << " ";
-		addToReadSet(op1.abstractDomain);
-		result=applyConstraint(basic_block_ptr,dst_ptr,result);
-		break;
-	case 26: // Store
-		op1=p[0];
-		op2=p[1];
-		for(unsigned int i=0;i<numThreads;i++) {
-			int w;
-			if(op2.width)
-				w=op2.width-1;
-			else
-				w=0;
-			storeToMemory(basic_block_ptr,op2.abstractDomain.abstractDomVec[i],op1.abstractDomain.abstractDomVec[i]);
-			op2.abstractDomain.abstractDomVec[i]=op2.abstractDomain.abstractDomVec[i].binary_op(CLP_ADD_EXPAND,abstractDom(w,w,1));
-		}
-		result=op1;
-		cerr << "\nStore address = ";
-		op2.abstractDomain.print();
-		cerr << " ";
-		addToWriteSet(op2.abstractDomain);
-		break;
-	case 27: // getelementptr 
-		{
-			unsigned int s=p.size();
-			unsigned int start_pos;
-			std::string name="";
-            unsigned int op_width=p[0].width;
-            clp_t w;
-            FILL_CLP(w,op_width,op_width,1);
-			if(s==3) {
-				start_pos=1;
-				name=p[0].name;
-				for(unsigned int i=0;i<numThreads;i++) {
-					clp_t t=(p[start_pos].abstractDomain.abstractDomVec[i].SetabstractDom.begin())->clp;
-					clp_t z=(p[start_pos+1].abstractDomain.abstractDomVec[i].SetabstractDom.begin())->clp;
-					for(s=start_pos+2;s<p.size();s++)
-						z=clp_fn(CLP_ADD,(p[s].abstractDomain.abstractDomVec[i].SetabstractDom.begin())->clp,z,false);
-					result.pushToDomVec(abstractDom(clp_fn(CLP_ADD,t,clp_fn(CLP_MULT,z,w,false),false),name)); 
-				}
-			}
-			else if(s==2) 
-			{ 
-				start_pos=0;
-				for(unsigned int i=0;i<numThreads;i++) {
-					SetabstractDom_t s;
-					std::set<abstractDom, abstractDomCompare>::iterator it;
-					for(it=(p[start_pos].abstractDomain.abstractDomVec[i].SetabstractDom.begin());it!=(p[start_pos].abstractDomain.abstractDomVec[i].SetabstractDom.end());it++) {
-						clp_t t=it->clp;
-						name=it->name;
-						clp_t z=(p[start_pos+1].abstractDomain.abstractDomVec[i].SetabstractDom.begin())->clp;
-						cerr << "##################" << (*op_vec_ptr)[0]->width;// << "\n";
-						//assert ((*op_vec_ptr)[0]->width != 0);
-						PRINT_CLP(w);
-						PRINT_CLP(z);
-						cerr << "##################\n";
-						s.insert(abstractDom(clp_fn(CLP_ADD,t,clp_fn(CLP_MULT,z,w,false),false),name));
-					}
-					result.abstractDomain.abstractDomVec.push_back(s); 
-				}
-			}
-			else assert(0);
-			result.width=p[0].width;
-		}
-		break;
-	case 35:
-	case 28:// Trunc. TODO: check if this is correct 
-		op1=p[0];
-		result=op1;
-		break;
-	case 36:
-	case 31:
-	case 32:
-	case 29: // zero extend. TODO: check if this is correct
-	case 30: // sign extend. TODO: check if this is correct 
-		op1=p[0];
-		result=op1;
-		break;
-	case 38: // int to ptr. TODO: check if this is correct
-	case 37: // ptr to int. TODO: check if this is correct
-		op1=p[0]; 
-		result=op1;
-		break;
-	case 39: // bitcast. TODO: check if this is correct
-		op1=p[0]; 
-		result=op1;
-		break;	
-	case 41:
-	case 40: // icmp
-		op1=p[0];
-		op2=p[1];
-		result=op1;
-		result.cmp_val=op2.abstractDomain;
-		if(!p[0].isTID) {
-			result.auxilliary_op=(*op_vec_ptr)[0];
-		}
-		break;
-	case 42: // phi
-		op1=p[0];
-		if(p.size()==1) {	//TODO: check how can this happen?
-			result=op1;
-			result.width=p[0].width;
-		}
-		else {
-			op2=p[1];
-			result=op1.binary_op(CLP_UNION,op2);
-			if(p[0].width==p[1].width)
-				result.width=p[0].width;
-			//		else assert(0); // TODO: check what happens?
-		}
-		break;
-	case 43: //calls
-		op1=p[0];
-		result=op1;
-		break;
+	
+    case Instruction::Add: // 7:		// Add
+		  op1=p[0]; 
+		  op2=p[1]; 
+		  result=op1+op2; 
+		  break; 
+    case Instruction::Sub:		// Sub
+	  	op1=p[0]; 
+	  	op2=p[1]; 
+	  	result=op1-op2; 
+	  	break; 
+    case Instruction::Mul:		// Mult
+	  	op1=p[0]; 
+	  	op2=p[1]; 
+	  	result=op1*op2; 
+	  	break; 
+    case Instruction::SDiv:	// Sdiv
+	  	op1=p[0]; 
+	  	op2=p[1]; 
+	  	result=op1/op2; 
+	  	break; 
+    case Instruction::Alloca: // Alloca. TODO: fix allocation size
+	  	op1=p[0];
+	  	result=op1;
+	  	result.width=p[0].width;
+	  	break;
+    /*
+    case Instruction::Load: // Load
+	  	op1=p[0];
+	  	for(unsigned int i=0;i<numThreads;i++) {
+	  		int w;
+	  		if(op1.width)
+	  			w=op1.width-1;
+	  		else
+	  			w=0;
+	  		result.abstractDomain.abstractDomVec.push_back(loadFromMemory(basic_block_ptr,op1.abstractDomain.abstractDomVec[i]));
+	  		op1.abstractDomain.abstractDomVec[i]=op1.abstractDomain.abstractDomVec[i].binary_op(CLP_ADD_EXPAND,abstractDom(w,w,1));
+	  	}
+	  	//cerr << "\nLoad address = ";
+	  	//op1.abstractDomain.print();
+	  	//cerr << " ";
+	  	addToReadSet(op1.abstractDomain);
+	  	result=applyConstraint(basic_block_ptr,dst_ptr,result);
+	  	break;
+    case Instruction::Store: // Store
+	  	op1=p[0];
+	  	op2=p[1];
+	  	for(unsigned int i=0;i<numThreads;i++) {
+	  		int w;
+	  		if(op2.width)
+	  			w=op2.width-1;
+	  		else
+	  			w=0;
+	  		storeToMemory(basic_block_ptr,op2.abstractDomain.abstractDomVec[i],op1.abstractDomain.abstractDomVec[i]);
+	  		op2.abstractDomain.abstractDomVec[i]=op2.abstractDomain.abstractDomVec[i].binary_op(CLP_ADD_EXPAND,abstractDom(w,w,1));
+	  	}
+	  	result=op1;
+	  	cerr << "\nStore address = ";
+	  	op2.abstractDomain.print();
+	  	cerr << " ";
+	  	addToWriteSet(op2.abstractDomain);
+	  	break;
+    case Instruction::GetElementPtr: // getelementptr 
+	  	{
+	  		unsigned int s=p.size();
+	  		unsigned int start_pos;
+	  		std::string name="";
+              unsigned int op_width=p[0].width;
+              clp_t w;
+              FILL_CLP(w,op_width,op_width,1);
+	  		if(s==3) {
+	  			start_pos=1;
+	  			name=p[0].name;
+	  			for(unsigned int i=0;i<numThreads;i++) {
+	  				clp_t t=(p[start_pos].abstractDomain.abstractDomVec[i].SetabstractDom.begin())->clp;
+	  				clp_t z=(p[start_pos+1].abstractDomain.abstractDomVec[i].SetabstractDom.begin())->clp;
+	  				for(s=start_pos+2;s<p.size();s++)
+	  					z=clp_fn(CLP_ADD,(p[s].abstractDomain.abstractDomVec[i].SetabstractDom.begin())->clp,z,false);
+	  				result.pushToDomVec(abstractDom(clp_fn(CLP_ADD,t,clp_fn(CLP_MULT,z,w,false),false),name)); 
+	  			}
+	  		}
+	  		else if(s==2) 
+	  		{ 
+	  			start_pos=0;
+	  			for(unsigned int i=0;i<numThreads;i++) {
+	  				SetabstractDom_t s;
+	  				std::set<abstractDom, abstractDomCompare>::iterator it;
+	  				for(it=(p[start_pos].abstractDomain.abstractDomVec[i].SetabstractDom.begin());it!=(p[start_pos].abstractDomain.abstractDomVec[i].SetabstractDom.end());it++) {
+	  					clp_t t=it->clp;
+	  					name=it->name;
+	  					clp_t z=(p[start_pos+1].abstractDomain.abstractDomVec[i].SetabstractDom.begin())->clp;
+	  					cerr << "##################" << (*op_vec_ptr)[0]->width;// << "\n";
+	  					//assert ((*op_vec_ptr)[0]->width != 0);
+	  					PRINT_CLP(w);
+	  					PRINT_CLP(z);
+	  					cerr << "##################\n";
+	  					s.insert(abstractDom(clp_fn(CLP_ADD,t,clp_fn(CLP_MULT,z,w,false),false),name));
+	  				}
+	  				result.abstractDomain.abstractDomVec.push_back(s); 
+	  			}
+	  		}
+	  		else assert(0);
+	  		result.width=p[0].width;
+	  	}
+	  	break;
+	  case 35:
+	  case 28:// Trunc. TODO: check if this is correct 
+	  	op1=p[0];
+	  	result=op1;
+	  	break;
+	  case 36:
+	  case 31:
+	  case 32:
+	  case 29: // zero extend. TODO: check if this is correct
+	  case 30: // sign extend. TODO: check if this is correct 
+	  	op1=p[0];
+	  	result=op1;
+	  	break;
+	  case 38: // int to ptr. TODO: check if this is correct
+	  case 37: // ptr to int. TODO: check if this is correct
+	  	op1=p[0]; 
+	  	result=op1;
+	  	break;
+    case Instruction::Bitcast: // bitcast. TODO: check if this is correct
+	  	op1=p[0]; 
+	  	result=op1;
+	  	break;	
+	  case 41:
+    case Instruction::Icmp: // icmp
+	  	op1=p[0]; // TODO possible bug with the index of p[0] and p[1]
+	  	op2=p[1];
+	  	result=op1;
+	  	result.cmp_val=op2.abstractDomain;
+	  	if(!p[0].isTID) {
+	  		result.auxilliary_op=(*op_vec_ptr)[0];
+	  	}
+	  	break;
+    case Instruction::Phi: // phi
+	  	op1=p[0];
+	  	if(p.size()==1) {	//TODO: check how can this happen?
+	  		result=op1;
+	  		result.width=p[0].width;
+	  	}
+	  	else {
+	  		op2=p[1];
+	  		result=op1.binary_op(CLP_UNION,op2);
+	  		if(p[0].width==p[1].width)
+	  			result.width=p[0].width;
+	  		//		else assert(0); // TODO: check what happens?
+	  	}
+	  	break;
+    case Instruction::Call: //calls
+	  	op1=p[0];
+	  	result=op1;
+	  	break;
+  */
 	default:
-//		cerr << "Unimplemented opcode " << opcode << " \n";
-//		assert(0);
+		cerr << "Unimplemented opcode " << opcode << " \n";
+		assert(0);
 		op1=p[0];
 		result=op1;
+
 //		return false;
 	}
-
 	// apply constraints
-//	result=applyConstraint(basic_block_ptr,dst_ptr,result);
+  //	result=applyConstraint(basic_block_ptr,dst_ptr,result);
 
 	// copy back & check if anything has changed
 	has_changed=false;
 	if(dst_ptr->abstractDomain!=result.abstractDomain)
 	{
-		abstractDomVec_t old_val=dst_ptr->abstractDomain;
+		SetabstractDomVec_t old_val=dst_ptr->abstractDomain;
 		dst_ptr->abstractDomain=result.abstractDomain;
 		has_changed=true;
-		if(old_val.abstractDomVec.size()==result.abstractDomain.abstractDomVec.size()) {
-			int size=old_val.abstractDomVec.size();
+		if(old_val.setabstractDomVec.size()==result.abstractDomain.abstractDomVec.size()) {
+			int size=old_val.setabstractDomVec.size();
 			for(int i=0;i<size;i++) {
 				SetabstractDom_t *s1=&(old_val.abstractDomVec[i]);
-				SetabstractDom_t *s2=&(dst_ptr->abstractDomain.abstractDomVec[i]);
+				SetabstractDom_t *s2=&(dst_ptr->abstractDomain.setabstractDomVec[i]);
 				std::set<abstractDom, abstractDomCompare>::iterator it1;
 				std::set<abstractDom, abstractDomCompare>::iterator it2;
 				for(it2=s2->SetabstractDom.begin();it2!=s2->SetabstractDom.end();){
@@ -599,8 +673,7 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 	dst_ptr->cmp_pred=cmp_pred;
 
 	dst_ptr->width = result.width;
-
-	return has_changed;
-  */
+	
+  return has_changed;
 }
 
