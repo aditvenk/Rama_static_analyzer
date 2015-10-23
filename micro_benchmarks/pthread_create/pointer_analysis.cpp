@@ -23,9 +23,16 @@ void* workerFunction (void* args) {
 
 int main() {
   worker_args_t wargs[2];
+  int tid=0;
+
   for (int i=0; i<2; i++) {
-    wargs[i].tid = i;
+    tid = i;
+    wargs[i].tid = i+tid;
   }
+  int *a = (int*) malloc(sizeof(int));
+  
+
+  int x = wargs[0].tid;
   
   for (int i=0; i<2; i++) {
     pthread_create(&t[i], NULL, &workerFunction, (void*) &wargs[i]);
@@ -34,7 +41,8 @@ int main() {
   for (int i=0; i<2; i++) {
     pthread_join(t[i], NULL);
   }
+  free(a);
 
-  return 0;
+  return tid;
 }
 

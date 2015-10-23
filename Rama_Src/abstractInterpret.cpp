@@ -4,6 +4,7 @@
 using namespace Rama;
 
 unsigned int numThreads;
+static bool has_changed;
 
 std::set<BasicBlock*> BBInitList;
 std::set<BasicBlock*> BBSkipList;
@@ -71,7 +72,136 @@ void FunctionAnalysis::bbStart (BasicBlock* cur_ptr, std::vector<BasicBlock*> *p
 	}
 }
 
+void addConstraint(BasicBlock *basic_block_ptr,op_info *dst_ptr,abstractDomVec_t range) {
+	if((abstractConstraintMap.find(basic_block_ptr)==abstractConstraintMap.end()) ||
+	   ((abstractConstraintMap[basic_block_ptr]).find(dst_ptr)==(abstractConstraintMap[basic_block_ptr]).end())
+	) {
+		(abstractConstraintMap[basic_block_ptr])[dst_ptr]=range;
+	}
+	else {
+		((abstractConstraintMap[basic_block_ptr])[dst_ptr])=((abstractConstraintMap[basic_block_ptr])[dst_ptr]).binary_op(CLP_INTERSECT,range);
+	}
+}
+
+op_info applyConstraint(BasicBlock *basic_block_ptr,op_info *dst_ptr,op_info value) {
+
+	assert(basic_block_ptr);
+
+	if((dst_ptr->isLiteral) ||
+	   (dst_ptr->isBasicBlockPtr) ||
+	   (dst_ptr->isFunctionPtr) ||
+	   (dst_ptr->isTID)
+	  )
+		return value;
+
+	op_info result=value;	// to preserve the other boolean fields
+
+	std::map<op_info *,abstractDomVec_t>::iterator iter;
+
+	if(abstractConstraintMap.find(basic_block_ptr)!=abstractConstraintMap.end()) {
+		if((iter=(abstractConstraintMap[basic_block_ptr]).find(dst_ptr))!=(abstractConstraintMap[basic_block_ptr]).end()) {
+			for(unsigned int i=0;i<numThreads;i++) {
+				result.abstractDomain.abstractDomVec[i]=
+				(*iter).second.abstractDomVec[i].binary_op(CLP_INTERSECT,value.abstractDomain.abstractDomVec[i]);
+			}
+		}
+	}
+
+	if(result.abstractDomain.abstractDomVec.size()<numThreads)
+		return result;
+
+	if(TIDConstraintMap.find(basic_block_ptr)!=TIDConstraintMap.end()) {
+		for(unsigned int i=0;i<numThreads;i++) {
+			if(!(TIDConstraintMap[basic_block_ptr] & (1<<i))) {
+				clp_t x;
+				CLEAR_CLP(x);
+				result.abstractDomain.abstractDomVec[i]=abstractDom(x);
+			}
+		}
+	}
+
+	return result;
+}
+
+void propagateConstraintMap(BasicBlock* cur_ptr, BasicBlock* target_ptr, op_info* special_op=NULL, SetabstractDomVec_t *special_op_val=NULL) {
+
+	bool special_op_added=false;
+	if(abstractConstraintMap.find(cur_ptr)!=abstractConstraintMap.end()) { // if cur_ptr has entry in abstractConstraintMap
+		std::map<op_info *,SetabstractDomVec_t>::iterator iter;
+		for(iter=(abstractConstraintMap[cur_ptr]).begin();iter!=(abstractConstraintMap[cur_ptr]).end();iter++) {
+			SetabstractDomVec_t x;
+			if(special_op && ((*iter).first==special_op)) {
+				x=(*special_op_val);
+				special_op_added=true;
+			}
+			else
+				x=(*iter).second;
+
+			if( (abstractConstraintMapIn.find(target_ptr)==abstractConstraintMapIn.end()) || // target_ptr has no abstract constraints coming in
+
+			   ((abstractConstraintMapIn[target_ptr]).find((*iter).first)==(abstractConstraintMapIn[target_ptr]).end()) // target_ptr has some abstract constraints, but no entry for op_info* that we are examining
+			  ) 
+      {
+        (abstractConstraintMapIn[target_ptr])[(*iter).first]=x;
+			}
+			else 
+      { 
+				// target_ptr has abstract constraints already for current op_info*. take union with existing constraints
+				((abstractConstraintMapIn[target_ptr])[(*iter).first])=((abstractConstraintMapIn[target_ptr])[(*iter).first]).binary_op(CLP_UNION,x);
+			}
+		}
+	} 
+
+	if(special_op && !special_op_added) {
+		abstractDomVec_t x;
+		x=(*special_op_val);
+		if(abstractConstraintMapIn.find(target_ptr)==abstractConstraintMapIn.end() ||
+		  (abstractConstraintMapIn[target_ptr]).find(special_op)==(abstractConstraintMapIn[target_ptr]).end()
+		) {
+			(abstractConstraintMapIn[target_ptr])[special_op]=x;
+		}
+		else { 
+			// take union with existing constraints
+			((abstractConstraintMapIn[target_ptr])[special_op])=((abstractConstraintMapIn[target_ptr])[special_op]).binary_op(CLP_UNION,x);
+		}	
+	}
+}
+
+void propagateTIDConstraintMap(BasicBlock* cur_ptr, BasicBlock* target_ptr, int value=-1) {
+
+	bool value_added=false;
+	if(TIDConstraintMap.find(cur_ptr)!=TIDConstraintMap.end()) { // if cur_ptr has an entry in TIDConstraintMap
+		if(TIDConstraintMapIn.find(target_ptr)==TIDConstraintMapIn.end()) {
+			if(value>=0) {
+				value_added=true;
+				TIDConstraintMapIn[target_ptr]=value;
+			}
+			else {
+				TIDConstraintMapIn[target_ptr]=TIDConstraintMap[cur_ptr];
+			}
+		}
+		else {// take union with existing constraints
+			if(value>=0) {
+				value_added=true;
+				TIDConstraintMapIn[target_ptr] |= value;
+			}
+			TIDConstraintMapIn[target_ptr] |= TIDConstraintMap[cur_ptr];
+		}
+	}
+
+	if(value>=0 && (!value_added)) {
+		if(TIDConstraintMapIn.find(target_ptr)==TIDConstraintMapIn.end()) {
+			TIDConstraintMapIn[target_ptr]=value;			
+		}
+		else {
+			TIDConstraintMapIn[target_ptr] |= value;
+		}
+	}
+}
+
+
 bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned opcode, llvm::CmpInst::Predicate cmp_pred, op_info* dst_ptr, op_info_vec* op_vec_ptr, bool isSerial) {
+
 
   if(isSerial)
 		numThreads=1;
@@ -92,19 +222,18 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 
 	op_info c_op;
 	// process the operands
-  // op_vec_ptr == perInstrOpInfo
 	for(iter=op_vec_ptr->begin();iter!=op_vec_ptr->end();iter++) {
 
     // printOpInfo (*iter);
-    c_op=**iter;
-		if( (dst_ptr->isCall) && (iter==op_vec_ptr->begin() )) { // we are looking at first operand of a Call instruction (first argument passed to the function)
-			op_info temp;
+    c_op=**iter; // c_op is op_info of operand
+		if( (dst_ptr->isCall) && (iter==op_vec_ptr->end()-1 )) { // we are looking at last operand of a Call instruction (first argument passed to the function)
+      op_info temp;
 			temp=c_op;
 			temp.abstractDomain.clear();
 			if(c_op.name=="malloc") {
 				c_op.name+=dst_ptr->name; // unique name for the call --> malloc @ this instruction 
 				for(unsigned int i=0;i<numThreads;i++) {
-					abstractDom k(zero,c_op.name);
+					abstractDom k(zero,c_op.name); // zero is a global clp with values 0,0,1
 					temp.pushToDomVec(k);
 				}
 			}
@@ -117,8 +246,9 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 			}
 			p.push_back(temp);
 		}
+    // Note that the c_op.isTID field actually gets set in the case where the operand is checked to see if it is a instruction
 		else if(c_op.isTID) {
-			op_info temp;
+      op_info temp;
 			temp=c_op;
 			temp.isTID=true;
 			temp.abstractDomain.clear();
@@ -147,10 +277,10 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 			}
 			p.push_back(temp);			
 		}
-		else if(c_op.isPointer){
+    else if(c_op.isPointer){
 			op_info temp;
 			temp=c_op;
-			temp.isPointer=false;
+			temp.isPointer=false; // TODO why are they setting this to false?
 			temp.abstractDomain.clear();
 			for(unsigned int i=0;i<numThreads;i++) {
 				abstractDom k(zero,c_op.name);
@@ -158,8 +288,9 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 			}
 			p.push_back(temp);						
 		}
-		else if(c_op.isBasicBlockPtr) {
-			if(opcode==2) {
+    else if(c_op.isBasicBlockPtr) {
+
+			if(opcode==2) { // br TODO -- fix this
 				if(op_vec_ptr->size()==1) { // unconditional branch
 					propagateConstraintMap(basic_block_ptr,c_op.BasicBlockPtr);
 					propagateTIDConstraintMap(basic_block_ptr,c_op.BasicBlockPtr);
@@ -229,6 +360,8 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 			else
 				return true;
 		}
+  }
+    /*
 		else if(!(c_op.abstractDomain.abstractDomVec).size()) {
 		    op_info temp=c_op;
 			temp.abstractDomain.clear();
@@ -468,5 +601,6 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 	dst_ptr->width = result.width;
 
 	return has_changed;
+  */
 }
 
