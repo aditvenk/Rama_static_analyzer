@@ -4,7 +4,6 @@ IPO/
 InstCombine/
 Instrumentation/
 LLVMBuild.txt
-Makefile
 ObjCARC/
 Scalar/
 Utils/
