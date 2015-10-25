@@ -28,6 +28,33 @@ static RegisterPass<PointerAnalysis> X("rama", "Multi-threaded pointer analyzer"
 char FunctionAnalysis::ID = 0;
 static RegisterPass<FunctionAnalysis> Y("rama_functions", "Rama function analysis", true, false);
 
+
+void printInfoMap () {
+  InstrToInfoMap::iterator it;
+  for (it = info_map.begin (); it != info_map.end (); it++) {
+    cerr << instr_map[it->first] << " : ";
+    (it->second)->print();
+    cerr << "\n";
+  }
+}
+
+void FunctionAnalysis::printOpInfoSet ( std::set < SetabstractDomVec_t > &info_set) {
+  std::set < SetabstractDomVec_t >::iterator it;
+  for (it = info_set.begin (); it != info_set.end (); it++) {
+    (*it).print ();
+    cerr << "\n";
+  }
+}
+
+void FunctionAnalysis::addToReadSet ( SetabstractDomVec_t &ip ) {
+  rd_set.insert (ip);
+}
+
+void FunctionAnalysis::addToWriteSet ( SetabstractDomVec_t &ip ) {
+  wr_set.insert (ip);
+}
+
+
 // this function is called on each High Level Function -- i.e. Main and each WorkerThreadFunction
 bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second arg is true if F will be executed by a single flow of control
   string fnName = F.getName().str();
@@ -38,6 +65,8 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 
   bool has_changed = true;
   int num_passes = 0;
+  bool first_pass = 0;
+  bool widened = false;
   bool isNonNumInstr;
 
   op_info_vec* perInstrOpInfo = new op_info_vec;
@@ -51,6 +80,7 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
     wr_set.clear();
 
     assert ( num_passes <= NUM_TRIALS /* + POST_WIDEN_TRIALS */); // TODO - implement post-widen
+    cerr << "PASS #"<< num_passes<<endl;
 
     has_changed = false;
     for (Function::iterator i = F.begin(); i != F.end(); i++) {
@@ -66,7 +96,7 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
       std::vector <BasicBlock*> *i_pred = new std::vector <BasicBlock*>;
 
       for (pred_iterator I = pred_begin(i), E = pred_end(i); I != E; ++I) {
-        cerr << " PREDECESSOR = "<< (*I)->getName().str() << "\n";
+        cerr << "\tPREDECESSOR = "<< (*I)->getName().str() << "\n";
         i_pred->push_back(*I);
       }
 
@@ -75,7 +105,7 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
       for (BasicBlock::iterator b = (*i).begin(); b != (*i).end(); b++) {
 	      // If the instruction is of no interest to us skip its processing
 	      if ( (*b).getOpcode ( ) == Instruction::Unreachable ) {
-	        cerr << "  Found unreachable instr\n";
+	        cerr << "\t\tFound unreachable instr\n";
 	        continue;
 	      }
         
@@ -109,13 +139,13 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 	          out << "." << sub_instr_count;
 	          sub_instr_count++;
 	        }
-	        std::string instrName = "%" + fnName + "#" +  out.str ();
+	        std::string instrName = "%" + fnName + "#" +  out.str (); // this is the unique name we will store in instr_map. #<function>#number.sub-number
 	        op_info_struct = new op_info;
 	        op_info_struct->isInstruction = true;
-	        std::string instr_name = (*b).getName ().str();
+	        std::string instr_name = (*b).getName ().str(); // this is the instruction's name as given by llvm. typically the assigned var's name eg: %tid = .... --> name is tid
 	        if (instr_name.find ("tid") != std::string::npos) {
 	          op_info_struct->isTID = true;
-	          cerr << "  Found TID instr : "<<instr_name<<endl;
+	          cerr << "\t\tFound a TID instr : "<<instr_name<<endl;
 	        }
           
 	        // (*b) is the pointer to the instruction
@@ -143,13 +173,12 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 	          sub_instr_count = 0;
 	        }
         }  
-        else {
+        else { // instr present in info_map
 	        op_info_struct = iit->second;
 	        // Now check whether the instruction is in our instr_map
 	        // If not then we need to put it in
 	        InstrToNameMap::iterator map_iter = instr_map.find((Instruction *)&*(b));
-	        if (map_iter == instr_map.end()) {
-            cerr << "  BAD BAD BAD BAD "<<endl;
+	        if (map_iter == instr_map.end()) { // this case will occur when we encounter an instruction first as an operand to a prev instr. We will create an op_info and add to info_map, but not in instr_map. Why? I don't know. 
 	          std::stringstream out;
 	          out << instr_count;
 	          if ( isNonNumInstr == true ) {
@@ -165,9 +194,9 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 	        }
 	      }
         // Print out instruction
-	      cerr << "  "<<instr_map[b] << ":" << "\t opcode name = " << (*b).getOpcodeName () << "\n";
+	      cerr << "\t\t"<<instr_map[b] << ":" << "\t opcode name = " << (*b).getOpcodeName () << "\n";
 	      unsigned opcode = (*b).getOpcode(); // Holds the opcode of the instruction
-        cerr<< "  "<<instr_map[b] << ":" << "\t opcode value = " << (*b).getOpcode() << endl;
+        cerr<< "\t\t"<<instr_map[b] << ":" << "\t opcode value = " << (*b).getOpcode() << endl;
 
         // If it is a cmp instruction extract the predicate
 	      llvm::CmpInst::Predicate cmp_pred;
@@ -178,18 +207,18 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 	      if (opcode == Instruction::Alloca) { 
 	        //cerr << "Found alloca";
 	        AllocaInst* a_inst = dyn_cast<AllocaInst> (b);
-	        //cerr << "operand name = " << op_info_struct->name << (a_inst->getArraySize())->getName();
-	        //cerr << "array size = " << (a_inst->getAllocatedType())->getArrayNumElements();
-	        cerr<<"  ";
-          (a_inst->getArraySize())->dump();
+	        cerr << "\t\talloca name = " << op_info_struct->name << (a_inst->getArraySize())->getName().str() << "  ";
+	        cerr << "array size = " << (a_inst->getAllocatedType())->getArrayNumElements() << endl;
+	        // cerr<<"  ";
+          // (a_inst->getArraySize())->dump();
 	        //cerr << "\n";
 	        //if (isa<Constant> (a_inst->getArraySize()) ) {
 	        //  cerr << "val = " << (a_inst->getArraySize())->getIntegerValue();
 	        //}
 	      }
-
-        for (User::op_iterator operand = (*b).op_begin(); operand != (*b).op_end(); operand++) {
-          cerr << "   Name = " << (*operand)->getName().str() << " Type = " << (*operand)->getType ()<<endl;
+        int temp_op_itr = 0; 
+        for (User::op_iterator operand = (*b).op_begin(); operand != (*b).op_end(); operand++, temp_op_itr++) {
+          cerr << "\t\t\toperand #"<< temp_op_itr<<" Name = " << (*operand)->getName().str() << " Type = " << ((*operand)->getType ())->getTypeID()<<endl;
           // Find out interesting details about this operand
 	        // First find the width of the "eventual" data in the operand.
 	        unsigned widthInBits;
@@ -209,8 +238,8 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 	          
             // if the type is a pointer to an array we need to find the type of the array elements
 	          if ( dataType->getTypeID() == Type::ArrayTyID ) {
-	            cerr << "   ** Found Array ** " <<endl;
-	            //cerr << (((ArrayType *)&*((*operand)->getType()->getContainedType(0)))->getElementType ())->getTypeID ();
+	            cerr << "\t\t\t** Found Array ** " <<endl;
+	            cerr << "\t\t\tArray element type = " << (((ArrayType *)&*((*operand)->getType()->getContainedType(0)))->getElementType ())->getTypeID ()<<endl;
 	            dataType = ( (ArrayType *)&*(dataType) )->getElementType ();
 	            //cerr << width;
 	          }
@@ -231,16 +260,16 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
           }
 	        
           width = (unsigned) ceil ( (float) ( widthInBits )/8 ); // width of the operand in Bytes
-          cerr << "   width(Bytes) = "<< width << " width(Bits) = "<<widthInBits<<endl;
+          cerr << "\t\t\twidth(Bytes) = "<< width << " width(Bits) = "<<widthInBits<<endl;
           
           // every virtual register operand is of type Instruction and points to the instruction which generates it.
           if (isa <Instruction> (*operand)){
 	          InstrToNameMap::iterator map_iter = instr_map.find((Instruction *)&*(*operand)); 
 	          if (map_iter == instr_map.end()) {
-		          cerr << "   IOpNotInMapYet" <<endl;
+		          cerr << "\t\t\tIOpNotInMapYet" <<endl;
 	          }
             else {
-		          cerr << "   Instr found - " << map_iter->second <<endl;
+		          cerr << "\t\t\tInstr found - " << map_iter->second <<endl;
 	          }
 	      
 	          InstrToInfoMap::iterator InfoMap_iter = info_map.find((Instruction *)&*(*operand));
@@ -276,10 +305,11 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
           else if (isa<ConstantInt> (*operand)) {
 		        op_info* temp_op_info = new op_info;
 		        temp_op_info->isLiteral = true;
+            temp_op_info->isFixedPoint = true;
 		        temp_op_info->value = ((ConstantInt *)&*(*operand))->getZExtValue();
 		        temp_op_info->width = width;
 		        perInstrOpInfo->push_back (temp_op_info);
-		        cerr << "   Const " << temp_op_info->value <<endl;
+		        cerr << "\t\t\tConst " << temp_op_info->value <<endl;
           } 
           else if (isa<BasicBlock> (*operand)) {
 		        op_info* temp_op_info = new op_info;
@@ -287,20 +317,20 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 		        temp_op_info->BasicBlockPtr = (BasicBlock *)&*(*operand);
 		        temp_op_info->width = width;
 		        perInstrOpInfo->push_back (temp_op_info);
-		        cerr << "   BB " << (*operand)->getName().str()<<endl;
+		        cerr << "\t\t\tBB " << (*operand)->getName().str()<<endl;
           } 
           else if ((*operand)->getType()->getTypeID() == Type::PointerTyID) { // operand is a ptr
-            cerr << "   @" << (*operand)->getName ().str() <<endl;
+            cerr << "\t\t\t@" << (*operand)->getName ().str() <<endl;
             OpToInfoMap::iterator OpMap_iter = operand_map.find( (*operand)->getName () );
 	            
             if (OpMap_iter == operand_map.end()) {
               // Following seems to get the type of data the pointer is pointing to
-		          cerr << "   " << (*operand)->getType()->getTypeID() << " CT = " << ((*operand)->getType()->getContainedType(0))->getTypeID() << " width = " << ((*operand)->getType()->getContainedType(0))->getPrimitiveSizeInBits() <<endl;
+		          cerr << "\t\t\t" << (*operand)->getType()->getTypeID() << " CT = " << ((*operand)->getType()->getContainedType(0))->getTypeID() << " width = " << ((*operand)->getType()->getContainedType(0))->getPrimitiveSizeInBits() <<endl;
               int size = 1;
 		          bool isArray = false;
 		          
               if (((*operand)->getType()->getContainedType(0))->getTypeID() == Type::ArrayTyID) {
-		            cerr << "   ** Found Array ** "<<endl;
+		            cerr << "\t\t\t** Found Array ** "<<endl;
 		            isArray = true;
 		            size = ((ArrayType *)&*((*operand)->getType()->getContainedType(0)))->getNumElements();
               }
@@ -325,7 +355,7 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 		        temp_op_info->name = "tid";
 		        temp_op_info->width = width;
 		        perInstrOpInfo->push_back (temp_op_info);
-		        cerr << "   Found tid operand"<<endl;
+		        cerr << "\t\t\tFound tid operand"<<endl;
             exit(1); // TODO Remove this once you understand why this code is executed
           }
           else if ( isa<ConstantFP> (*operand) ) {
@@ -340,7 +370,7 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 			        if ( FPtype == (const llvm::fltSemantics*) &llvm::APFloat::IEEEsingle ) {
 			          temp_op_info->valueFP = ((ConstantFP *)&*(*operand))->getValueAPF().convertToFloat();
 			        } else {
-			          cerr << "   Found Float that is not of type double, nor of type single. valueFP = 0.0\n";
+			          cerr << "\t\t\tFound Float that is not of type double, nor of type single. valueFP = 0.0\n";
 			        }
 			      }
 			      perInstrOpInfo->push_back (temp_op_info);
@@ -348,7 +378,7 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
           else {
 			      op_info* temp_op_info = new op_info;
 			      perInstrOpInfo->push_back (temp_op_info);
-			      cerr << "   "<<(*operand)->getName ().str() << ": Found an operand that is not instruction/literal/basic block/tid. Skipping " <<endl;
+			      cerr << "\t\t\t"<<(*operand)->getName ().str() << ": Found an operand that is not instruction/literal/basic block/tid. Skipping " <<endl;
 			      (*operand)->getType()->dump();
 			      cerr << (*operand)->getType()->getStructName().str() << (*operand)->getType()->getTypeID() << " " << "\n"; //(*operand)->getType()->getContainedType(0) <<"\n";
 			      //cerr << "\n";
@@ -356,12 +386,12 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 			      continue;
 		      }
         } // for (User::op_iterator ...) Iterate over all the operands of the instruction
-        cerr << "  Total OPs = " << perInstrOpInfo->size() <<endl;
+        cerr << "\t\tTotal OPs = " << perInstrOpInfo->size() <<endl;
 
         // Call the abstractCompute function
     	  bool result = abstractCompute (i, opcode, cmp_pred, op_info_struct, perInstrOpInfo, isSerial);
         has_changed |= result;
-	      cerr << " (changed = " << result;
+	      cerr << "\t(changed = " << result;
 	      cerr << ")   ";
 	      op_info_struct->print();
 	      cerr << "\n";
@@ -404,7 +434,7 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 	          abstractWiden ( aD );
 	    	    temp.insert(aD);
 	        }
-	    	  oi_struct->abstractDomain.abstractDomVec[l]=temp;
+	    	  oi_struct->abstractDomain.setabstractDomVec[l]=temp;
 	      }
       }
       abstractWidenMemory ();
@@ -436,13 +466,14 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 
 bool PointerAnalysis::analyzeFunctions(Module &M) {
   Function* func = M.getFunction("pthread_create");
+  FunctionAnalysis mainF;
   if (func == 0) {
     cerr << "pthread_create not found" << endl;
-    return false;
+    // return false; // HACK
   }
+
+  /*
   cerr << "pthread_create found = "<< func->getName().str() << endl;
-  
-  FunctionAnalysis mainF;
   set <Function*> thread_functions; // Holds Function* called as part of pthread_create
   pair < set <Function*>::iterator, bool > ret;
   vector <FunctionAnalysis*> threadF_vec;
@@ -466,9 +497,9 @@ bool PointerAnalysis::analyzeFunctions(Module &M) {
       cerr << "use of pthread_create was not a CallInst!"<<endl;
     }
   }
-
+  */
   // now call abstractCompute on the main function and each thread function
-
+  
   bool changed = true;
   while (changed == true) {
     changed = mainF.processFunction ( *(M.getFunction ("main")) , true); // isSerial = true

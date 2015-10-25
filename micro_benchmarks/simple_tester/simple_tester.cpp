@@ -2,6 +2,8 @@
 #include <iostream>
 
 int main() {
-  int a = 1;
-  return 0;
+  int a[5];
+  a[3] = 2;
+  int b = a[3];
+  return b;
 }

@@ -3,7 +3,6 @@ Hello/
 IPO/
 InstCombine/
 Instrumentation/
-LLVMBuild.txt
 ObjCARC/
 Scalar/
 Utils/
