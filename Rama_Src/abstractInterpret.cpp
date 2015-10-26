@@ -233,6 +233,20 @@ op_info applyConstraint(BasicBlock *basic_block_ptr,op_info *dst_ptr,op_info val
 	return result;
 }
 
+// iterate over a set of ADs and return CLP of AD of matching name
+clp_t getCLP(SetabstractDom_t s,std::string name) {
+	clp_t t;
+	CLEAR_CLP(t);
+	std::set<abstractDom, abstractDomCompare>::iterator it;
+	for(it=s.SetabstractDom.begin();it!=s.SetabstractDom.end();it++) {
+		if(it->name==name) {
+			t=it->clp;
+			break;
+		}
+	}
+	return t;
+}
+
 void computeConstraints(clp_t val, llvm::CmpInst::Predicate pred,clp_t &true_clp,clp_t &false_clp)
 {
 	if(EMPTY(val)) {
@@ -466,15 +480,16 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 			p.push_back(temp);						
 		}
     else if(c_op.isBasicBlockPtr) {
-    /*
-			if(opcode==Instruction::br) { // br 
+      // the following instructions could have a BB as operand
+			if(opcode==Instruction::Br) { // br 
 				if(op_vec_ptr->size()==1) { // unconditional branch
 					propagateConstraintMap(basic_block_ptr,c_op.BasicBlockPtr); // propagate constraints from cur BB to target BB and exit analysis
 					propagateTIDConstraintMap(basic_block_ptr,c_op.BasicBlockPtr);
-					return false;
+					return false; // has_changed = false
 				}
 				else {
-					assert(op_vec_ptr->size()==3); // assert that this is a conditional branch
+					assert (0 && "conditional br not implemented");
+          assert(op_vec_ptr->size()==3); // assert that this is a conditional branch
 					
           // add true-path and false-path constraints
 					SetabstractDomVec_t temp_vec1, temp_vec2;
@@ -495,8 +510,8 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 								//cerr << "FC "; PRINT_CLP(f); cerr << "\n";
 							}
 							//cerr << "^^^^^^^\n";
-							temp_vec1.abstractDomVec.push_back(true_constraint);
-							temp_vec2.abstractDomVec.push_back(false_constraint);
+							temp_vec1.setabstractDomVec.push_back(true_constraint);
+							temp_vec2.setabstractDomVec.push_back(false_constraint);
 						}
 						// propagate constraint maps
 						propagateConstraintMap(basic_block_ptr,((*op_vec_ptr)[0])->BasicBlockPtr,(*op_vec_ptr)[2]->auxilliary_op,&temp_vec1);
@@ -504,11 +519,11 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 						propagateTIDConstraintMap(basic_block_ptr,((*op_vec_ptr)[0])->BasicBlockPtr);
 						propagateTIDConstraintMap(basic_block_ptr,((*op_vec_ptr)[1])->BasicBlockPtr);
 					}
-					else if(((*op_vec_ptr)[2]->cmp_val).abstractDomVec.size()){	// TID constraint
+					else if(((*op_vec_ptr)[2]->cmp_val).setabstractDomVec.size()){	// TID constraint
 						int val1=0;
 						int val2=0;
 						for(unsigned int i=0;i<numThreads;i++) {
-							clp_t value=getCLP(((*op_vec_ptr)[2]->cmp_val).abstractDomVec[i],"");
+							clp_t value=getCLP(((*op_vec_ptr)[2]->cmp_val).setabstractDomVec[i],"");
 							clp_t t,f;
 							computeConstraints(value,pred,t,f);
 							clp_t x;
@@ -526,18 +541,18 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 						propagateTIDConstraintMap(basic_block_ptr,((*op_vec_ptr)[1])->BasicBlockPtr,val2);
 					}
 					else	// FP constraints? do nothing
-					;
+          {}
+
 					return false; // conditional branch
 				}
 			}
-			else if(opcode==1)
+			else if(opcode==Instruction::Ret)
 				return false;	// return
-			else if(opcode==42) { // phi
+			else if(opcode==Instruction::PHI) { // phi
 				continue;
 			}
 			else
 				return true;
-    */
     }
 		else if(!(c_op.abstractDomain.setabstractDomVec).size()) {
 		  op_info temp=c_op;
@@ -699,8 +714,9 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 	  	break;	
 	  /*
     case 41:
-    case Instruction::Icmp: // icmp
-	  	op1=p[0]; // TODO possible bug with the index of p[0] and p[1]
+    */
+    case Instruction::ICmp: // icmp
+	  	op1=p[0]; 
 	  	op2=p[1];
 	  	result=op1;
 	  	result.cmp_val=op2.abstractDomain;
@@ -708,7 +724,7 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 	  		result.auxilliary_op=(*op_vec_ptr)[0];
 	  	}
 	  	break;
-    case Instruction::Phi: // phi
+    case Instruction::PHI: // phi
 	  	op1=p[0];
 	  	if(p.size()==1) {	//TODO: check how can this happen?
 	  		result=op1;
@@ -719,10 +735,9 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 	  		result=op1.binary_op(CLP_UNION,op2);
 	  		if(p[0].width==p[1].width)
 	  			result.width=p[0].width;
-	  		//		else assert(0); // TODO: check what happens?
+	  		else assert(0); // TODO: check what happens?
 	  	}
 	  	break;
-    */
     case Instruction::Call: //calls
 	  	op1=p[0];
 	  	result=op1;

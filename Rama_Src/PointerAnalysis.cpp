@@ -266,7 +266,7 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
           if (isa <Instruction> (*operand)){
 	          InstrToNameMap::iterator map_iter = instr_map.find((Instruction *)&*(*operand)); 
 	          if (map_iter == instr_map.end()) {
-		          cerr << "\t\t\tIOpNotInMapYet" <<endl;
+		          cerr << "\t\t\tIns Op not in instr map" <<endl;
 	          }
             else {
 		          cerr << "\t\t\tInstr found - " << map_iter->second <<endl;
@@ -274,7 +274,7 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 	      
 	          InstrToInfoMap::iterator InfoMap_iter = info_map.find((Instruction *)&*(*operand));
 	          if (InfoMap_iter == info_map.end()) {
-	  	        //cerr << "Not in info_map ";
+	  	        cerr << "\t\t\tIns Op not in info_map, adding now "<<endl;
 		          // Allocate 
 		          op_info* temp_op_info = new op_info;
 		          temp_op_info->isInstruction = true;
