@@ -7,5 +7,5 @@ if [[ $USER == "neelakandan" ]]
 then 
 	opt -load /scratch/neelakandan/tools/llvm-3.8-build/lib/LLVMPointerAnalysis.so -rama -mem2reg < simple_tester.optbc 
 else
-	opt -load /scratch/adityav/llvm_build/lib/LLVMPointerAnalysis.so -rama -mem2reg < simple_tester.optbc
+	opt -load /scratch/adityav/llvm_build/lib/LLVMPointerAnalysis.so -rama < simple_tester.optbc
 fi 
