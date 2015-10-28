@@ -249,7 +249,7 @@ clp_t getCLP(SetabstractDom_t s,std::string name) {
 
 void computeConstraints(clp_t val, llvm::CmpInst::Predicate pred,clp_t &true_clp,clp_t &false_clp)
 {
-	if(EMPTY(val)) {
+	if(EMPTY(val)) { // if val is empty (not populated), we don't know anything. So TOP on both t and f paths
 		MAKE_TOP(true_clp);
 		MAKE_TOP(false_clp);
 		return;
@@ -258,12 +258,12 @@ void computeConstraints(clp_t val, llvm::CmpInst::Predicate pred,clp_t &true_clp
 	   (pred==llvm::CmpInst::ICMP_SLT)||
 	   (pred==llvm::CmpInst::ICMP_SGT)||
 	   (pred==llvm::CmpInst::ICMP_SLE)
-	  ) && (val.l>val.u)) {
+	  ) && (val.l>val.u)) { // val.l > val.u implies val is TOP. Comparing <, >, <=, >= with TOP, will yield TOP on both t and f paths
 		MAKE_TOP(true_clp);
 		MAKE_TOP(false_clp);
 		return;
     }
-
+  // val is not empty or TOP, so we know something about op2 of icmp instruction.
 	switch(pred)
 	{
 		case llvm::CmpInst::ICMP_EQ:
@@ -488,12 +488,11 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 					return false; // has_changed = false
 				}
 				else {
-					assert (0 && "conditional br not implemented");
           assert(op_vec_ptr->size()==3); // assert that this is a conditional branch
 					
           // add true-path and false-path constraints
 					SetabstractDomVec_t temp_vec1, temp_vec2;
-					llvm::CmpInst::Predicate pred = (*op_vec_ptr)[0]->cmp_pred; // check operand 0 of cond br instruction, which is the condition predicate
+					llvm::CmpInst::Predicate pred = (*op_vec_ptr)[0]->cmp_pred; // check operand 0 of cond br instruction, which is the condn-flag (result of icmp instruction)
 					if((*op_vec_ptr)[0]->auxilliary_op) {
 						for(unsigned int i=0;i<numThreads;i++) {
 							SetabstractDom_t true_constraint;
@@ -501,29 +500,29 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 							clp_t t,f;
 							std::set<abstractDom, abstractDomCompare>::iterator it;
 							SetabstractDom_t s=((*op_vec_ptr)[0]->cmp_val).setabstractDomVec[i];
-							//cerr << "^^^^^^^\n";
+							cerr << "\t\t\t\t^^^^^^^\n";
 							for(it=s.SetabstractDom.begin();it!=s.SetabstractDom.end();it++) {
 								computeConstraints(it->clp,pred,t,f);
 								true_constraint.insert(t);
 								false_constraint.insert(f);
-								//cerr << "TC "; PRINT_CLP(t); cerr << "\n";
-								//cerr << "FC "; PRINT_CLP(f); cerr << "\n";
+								cerr << "\t\t\t\tTC "; PRINT_CLP(t); cerr << "\n";
+								cerr << "\t\t\t\tFC "; PRINT_CLP(f); cerr << "\n";
 							}
-							//cerr << "^^^^^^^\n";
+							cerr << "\t\t\t\t^^^^^^^\n";
 							temp_vec1.setabstractDomVec.push_back(true_constraint);
 							temp_vec2.setabstractDomVec.push_back(false_constraint);
 						}
 						// propagate constraint maps
-						propagateConstraintMap(basic_block_ptr,((*op_vec_ptr)[0])->BasicBlockPtr,(*op_vec_ptr)[2]->auxilliary_op,&temp_vec1);
-						propagateConstraintMap(basic_block_ptr,((*op_vec_ptr)[1])->BasicBlockPtr,(*op_vec_ptr)[2]->auxilliary_op,&temp_vec2);
-						propagateTIDConstraintMap(basic_block_ptr,((*op_vec_ptr)[0])->BasicBlockPtr);
+						propagateConstraintMap(basic_block_ptr,((*op_vec_ptr)[1])->BasicBlockPtr,(*op_vec_ptr)[0]->auxilliary_op,&temp_vec1);
+						propagateConstraintMap(basic_block_ptr,((*op_vec_ptr)[2])->BasicBlockPtr,(*op_vec_ptr)[0]->auxilliary_op,&temp_vec2);
 						propagateTIDConstraintMap(basic_block_ptr,((*op_vec_ptr)[1])->BasicBlockPtr);
+						propagateTIDConstraintMap(basic_block_ptr,((*op_vec_ptr)[2])->BasicBlockPtr);
 					}
-					else if(((*op_vec_ptr)[2]->cmp_val).setabstractDomVec.size()){	// TID constraint
+					else if(((*op_vec_ptr)[0]->cmp_val).setabstractDomVec.size()){	// TID constraint
 						int val1=0;
 						int val2=0;
 						for(unsigned int i=0;i<numThreads;i++) {
-							clp_t value=getCLP(((*op_vec_ptr)[2]->cmp_val).setabstractDomVec[i],"");
+							clp_t value=getCLP(((*op_vec_ptr)[0]->cmp_val).setabstractDomVec[i],"");
 							clp_t t,f;
 							computeConstraints(value,pred,t,f);
 							clp_t x;
@@ -535,10 +534,10 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 								val2 |= (1<<i); // enabled on false-path
 							}
 						}
-						propagateConstraintMap(basic_block_ptr,((*op_vec_ptr)[0])->BasicBlockPtr);
 						propagateConstraintMap(basic_block_ptr,((*op_vec_ptr)[1])->BasicBlockPtr);
-						propagateTIDConstraintMap(basic_block_ptr,((*op_vec_ptr)[0])->BasicBlockPtr,val1);
-						propagateTIDConstraintMap(basic_block_ptr,((*op_vec_ptr)[1])->BasicBlockPtr,val2);
+						propagateConstraintMap(basic_block_ptr,((*op_vec_ptr)[2])->BasicBlockPtr);
+						propagateTIDConstraintMap(basic_block_ptr,((*op_vec_ptr)[1])->BasicBlockPtr,val1);
+						propagateTIDConstraintMap(basic_block_ptr,((*op_vec_ptr)[2])->BasicBlockPtr,val2);
 					}
 					else	// FP constraints? do nothing
           {}
