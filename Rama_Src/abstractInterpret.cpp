@@ -25,6 +25,13 @@ void FunctionAnalysis::abstractInit() {
   numThreads = NUM_THREADS;
 }
 
+/**
+ * 1. Check if a bb is OK to analyse. A bb is OK to analyze if
+ * 	- it has no prdecessors
+ * 	- it has predecessors and at least one of them is already in the BBInitList
+ * 2. Propagate constraints that are coming in (if there are any) from abstractConstraintMapIn and TIDConstraintMapIn into abstractConstraintMap and TIDConstraintMap
+ * Assuming these are constraints that are arrving from the predecessor bb?
+ */
 void FunctionAnalysis::bbStart (BasicBlock* cur_ptr, std::vector<BasicBlock*> *pred_ptr_vec) {
   
   std::vector<BasicBlock *>::iterator pred_vec_iter;
@@ -390,16 +397,17 @@ void propagateTIDConstraintMap(BasicBlock* cur_ptr, BasicBlock* target_ptr, int 
 	}
 }
 
-
 bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned opcode, llvm::CmpInst::Predicate cmp_pred, op_info* dst_ptr, op_info_vec* op_vec_ptr, bool isSerial) {
 
-
+  // TODO - NN: Why is numThreads being set here again when it was set in abstractInit() already?
   if(isSerial)
 		numThreads=1;
 	else
 		numThreads=NUM_THREADS;
 
-  std::vector<op_info> p;
+	// for each operand, p will hold the abstractDomains corresponding to the operand as seen at the different threads
+	// thus p[2] will refer to the second operand and p[2].abstractDom[0] will refer to the abstractDomain corresponding to the second operand as seen at thread 0
+  	std::vector<op_info> p;
 	op_info op1,op2;
 	op_info result;
 
@@ -408,38 +416,43 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 
 	has_changed=false;
 
-	if(BBSkipList.find(basic_block_ptr)!=BBSkipList.end())	// not yet seen at least one predecessors
+	if(BBSkipList.find(basic_block_ptr)!=BBSkipList.end()){	// not yet seen at least one predecessors - thus we cannot process this instruction
 		return true;
+	}
 
 	op_info c_op;
-	// process the operands
-	for(iter=op_vec_ptr->begin();iter!=op_vec_ptr->end();iter++) {
 
-    // printOpInfo (*iter);
-    c_op=**iter; // c_op is op_info of operand
-		if( (dst_ptr->isCall) && (iter==op_vec_ptr->end()-1 )) { // we are looking at last operand of a Call instruction (first argument passed to the function)
-      op_info temp;
+
+	// iterate over each operand and process the operands to obtain their corresponding representation in the abstract domain
+	for(iter=op_vec_ptr->begin();iter!=op_vec_ptr->end();iter++) {
+		
+		// set c_op to be the op_info of operand being processed
+    		c_op=**iter;
+	 	// we are looking at last operand of a Call instruction (first argument passed to the function). The last operand is the name of the function
+		if( (dst_ptr->isCall) && (iter==op_vec_ptr->end()-1 )) {
+      			op_info temp;
 			temp=c_op;
 			temp.abstractDomain.clear();
 			if(c_op.name=="malloc") {
 				c_op.name+=dst_ptr->name; // unique name for the call --> malloc @ this instruction 
 				for(unsigned int i=0;i<numThreads;i++) {
-					abstractDom k(zero,c_op.name); // zero is a global clp with values 0,0,1
+					abstractDom k(zero,c_op.name); // zero is a global clp with values 0,0,1 - this represents the malloc'ed address in the abstractDomain
 					temp.pushToDomVec(k);
 				}
 			}
-			else {
+			else { // NOT a malloc
 				clp_t t;
-				MAKE_TOP(t);
+				MAKE_TOP(t); // TODO - NN: Understand what MAKE_TOP does
 				for(unsigned int i=0;i<numThreads;i++) {
 					temp.pushToDomVec(t);
 				}
 			}
 			p.push_back(temp);
 		}
-    // Note that the c_op.isTID field actually gets set in the case where the operand is checked to see if it is a instruction
+		// case where operand is a TID
+    		// Note that the c_op.isTID field actually gets set in the case where the operand is checked to see if it is a instruction (-NN referring to the case where we check if the operand name has tid?)
 		else if(c_op.isTID) {
-      op_info temp;
+      			op_info temp;
 			temp=c_op;
 			temp.isTID=true;
 			temp.abstractDomain.clear();
@@ -449,6 +462,7 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 			}
 			p.push_back(temp);
 		}
+		// case where operand is a literal
 		else if(c_op.isLiteral){
 			op_info temp;
 			temp=c_op;
@@ -468,7 +482,8 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 			}
 			p.push_back(temp);			
 		}
-    else if(c_op.isPointer){
+		// case where operand is a pointer
+    		else if(c_op.isPointer){
 			op_info temp;
 			temp=c_op;
 			temp.isPointer=false; // TODO why are they setting this to false?
@@ -479,8 +494,9 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 			}
 			p.push_back(temp);						
 		}
-    else if(c_op.isBasicBlockPtr) {
-      // the following instructions could have a BB as operand
+		// case where operand is a basic block pointer
+    		else if(c_op.isBasicBlockPtr) {
+      			// the following instructions could have a BB as operand
 			if(opcode==Instruction::Br) { // br 
 				if(op_vec_ptr->size()==1) { // unconditional branch
 					propagateConstraintMap(basic_block_ptr,c_op.BasicBlockPtr); // propagate constraints from cur BB to target BB and exit analysis
@@ -565,13 +581,13 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 			// copy the operand
 			p.push_back(c_op);
 		}
-	} // iterate over operands
+	} // finish iterate over operands
 
 	for(unsigned int i=0;i<p.size();i++){
 		p[i]=applyConstraint(basic_block_ptr,(*op_vec_ptr)[i],p[i]);
 	}
 
-	// compute the result
+	// we have the abstract representation of the operands, now compute the symbolic result of the operation 
 	switch(opcode) {
 	
     case Instruction::Add: // 7:		// Add
