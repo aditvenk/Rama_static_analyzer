@@ -93,6 +93,8 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 		cerr << "PASS #"<< num_passes<<endl;
 
 		has_changed = false;
+		
+		/****************************************Basic Block*********************************/
 		for (Function::iterator i = F.begin(); i != F.end(); i++) {
 			cerr << "BASIC BLOCK: "<<(*i).getName().str() << "\n";
 
@@ -113,6 +115,7 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 			// propagate incoming constraints	
 			bbStart (i, i_pred); // TODO - what does this function do?
 
+			/****************************************Instruction*********************************/
 			// iterate over each instruction in the bb
 			for (BasicBlock::iterator b = (*i).begin(); b != (*i).end(); b++) {
 
@@ -230,6 +233,8 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 
 				int temp_op_itr = 0;//keep track of the number of operands 
 
+
+				/****************************************Operand*********************************/
 				// Now lets go over each operand in the instruction 
 				for (User::op_iterator operand = (*b).op_begin(); operand != (*b).op_end(); operand++, temp_op_itr++) {
 
@@ -308,6 +313,7 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 							perInstrOpInfo->push_back (temp_op_info);
 						} 
 						else {
+							InfoMap_iter->second->abstractDomain.print();
 							// update the width of the operand
 							InfoMap_iter->second->width = width;
 							//cerr << "*" << (InfoMap_iter->second)->width << "*";
@@ -428,6 +434,7 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 				cerr << "\n";
 
 				//Need to clear up the perInstrOpInfo vector here
+				//We clear the perInstrOpInfo, how does the constraints from each iteration get saved -- in the abstractConstraintsMap?
 				unsigned k;
 				unsigned size = perInstrOpInfo->size();
 				for (k = 0; k < size; k++) {
@@ -448,7 +455,7 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 		// If we have iterated over the code for more than the specified number of times then it is time
 		// to widen the ranges and bring the analysis to closure. So we'll initiate a special procedure as
 		// below. After this we should be terminating.
-
+		
 		if ((num_passes == NUM_TRIALS)&&(!widened)) {
 			// Widen the range of each op_info in our map
 			InstrToInfoMap::iterator InfoMap_iter;

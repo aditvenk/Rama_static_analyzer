@@ -430,10 +430,12 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 		c_op=**iter;
 		// we are looking at last operand of a Call instruction (first argument passed to the function). The last operand is the name of the function
 		if( (dst_ptr->isCall) && (iter==op_vec_ptr->end()-1 )) {
+			cerr << "\t\t\t\t Operand is a call inst \n";
 			op_info temp;
 			temp=c_op;
 			temp.abstractDomain.clear();
 			if(c_op.name=="malloc") {
+				cerr << "\t\t\t\t\t Is a malloc call inst \n";
 				c_op.name+=dst_ptr->name; // unique name for the call --> malloc @ this instruction 
 				for(unsigned int i=0;i<numThreads;i++) {
 					abstractDom k(zero,c_op.name); // zero is a global clp with values 0,0,1 - this represents the malloc'ed address in the abstractDomain
@@ -441,6 +443,7 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 				}
 			}
 			else { // NOT a malloc
+				cerr << "\t\t\t\t\t Is NOT a malloc call inst \n";
 				clp_t t;
 				MAKE_TOP(t); // TODO - NN: Understand what MAKE_TOP does
 				for(unsigned int i=0;i<numThreads;i++) {
@@ -452,6 +455,7 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 		// case where operand is a TID
 		// Note that the c_op.isTID field actually gets set in the case where the operand is checked to see if it is a instruction (-NN referring to the case where we check if the operand name has tid?)
 		else if(c_op.isTID) {
+			cerr << "\t\t\t\t Operand is a TID \n";
 			op_info temp;
 			temp=c_op;
 			temp.isTID=true;
@@ -464,6 +468,7 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 		}
 		// case where operand is a literal
 		else if(c_op.isLiteral){
+			cerr << "\t\t\t\t Operand is a literal \n";
 			op_info temp;
 			temp=c_op;
 			temp.isTID=false;
@@ -484,6 +489,7 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 		}
 		// case where operand is a pointer
 		else if(c_op.isPointer){
+			cerr << "\t\t\t\t Operand is a pointer \n";
 			op_info temp;
 			temp=c_op;
 			temp.isPointer=false; // TODO why are they setting this to false?
@@ -496,14 +502,17 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 		}
 		// case where operand is a basic block pointer
 		else if(c_op.isBasicBlockPtr) {
+			cerr << "\t\t\t\t Operand is a Basic Block \n";
 			// the following instructions could have a BB as operand
 			if(opcode==Instruction::Br) { // br 
 				if(op_vec_ptr->size()==1) { // unconditional branch
+					cerr << "\t\t\t\t Unconditional branch inst \n";
 					propagateConstraintMap(basic_block_ptr,c_op.BasicBlockPtr); // propagate constraints from cur BB to target BB and exit analysis
 					propagateTIDConstraintMap(basic_block_ptr,c_op.BasicBlockPtr);
 					return false; // has_changed = false
 				}
 				else {
+					cerr << "\t\t\t\t Unconditional branch inst \n";
 					assert(op_vec_ptr->size()==3); // assert that this is a conditional branch
 
 					// add true-path and false-path constraints
@@ -561,15 +570,19 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 					return false; // conditional branch
 				}
 			}
-			else if(opcode==Instruction::Ret)
+			else if(opcode==Instruction::Ret){
+				cerr << "\t\t\t\t Inst is a Return \n";
 				return false;	// return
+			}
 			else if(opcode==Instruction::PHI) { // phi
+				cerr << "\t\t\t\t Inst is a PHI \n";
 				continue;
 			}
 			else
 				return true;
 		}
 		else if(!(c_op.abstractDomain.setabstractDomVec).size()) {
+			cerr << "\t\t\t\t Empty Operand \n";
 			op_info temp=c_op;
 			temp.abstractDomain.clear();
 			for (unsigned int i = 0; i < numThreads; i++) {
@@ -578,6 +591,7 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 			p.push_back (temp);
 		}
 		else {
+			cerr << "\t\t\t\t Unclasified operand \n";
 			// copy the operand
 			p.push_back(c_op);
 		}
