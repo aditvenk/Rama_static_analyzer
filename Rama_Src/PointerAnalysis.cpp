@@ -313,7 +313,9 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 							perInstrOpInfo->push_back (temp_op_info);
 						} 
 						else {
-							InfoMap_iter->second->abstractDomain.print();
+							cerr << "\t\t\t";
+              InfoMap_iter->second->abstractDomain.print();
+              cerr << endl;
 							// update the width of the operand
 							InfoMap_iter->second->width = width;
 							//cerr << "*" << (InfoMap_iter->second)->width << "*";

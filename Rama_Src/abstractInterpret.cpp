@@ -52,10 +52,12 @@ void FunctionAnalysis::bbStart (BasicBlock* cur_ptr, std::vector<BasicBlock*> *p
 	}
 
 	if(!ok_to_analyze) {
+    cerr << "\tbbStart: BB "<< cur_ptr<<" not ok to analyze\n";
 		BBSkipList.insert(cur_ptr);
 		return;
 	}
 	else {
+    cerr << "\tbbStart: BB "<< cur_ptr<<" ok to analyze\n";
 		BBSkipList.erase(cur_ptr);
 		BBInitList.insert(cur_ptr);
 	}
@@ -63,6 +65,7 @@ void FunctionAnalysis::bbStart (BasicBlock* cur_ptr, std::vector<BasicBlock*> *p
 	abstractMem temp;
 
 	if(abstractConstraintMapIn.find(cur_ptr)!=abstractConstraintMapIn.end()) {
+    cerr << "\tbbStart: BB "<< cur_ptr<<" has entry in aCMapIn, copying constraints to aCMap\n";
 		abstractConstraintMap[cur_ptr]=abstractConstraintMapIn[cur_ptr]; // if constraints are coming in, we copy them into aCMap. 
 		abstractConstraintMapIn.erase(cur_ptr); // remove constraints from aCMin. 
 	}
@@ -218,7 +221,8 @@ op_info applyConstraint(BasicBlock *basic_block_ptr,op_info *dst_ptr,op_info val
 	if(abstractConstraintMap.find(basic_block_ptr)!=abstractConstraintMap.end()) {
 		if((iter=(abstractConstraintMap[basic_block_ptr]).find(dst_ptr))!=(abstractConstraintMap[basic_block_ptr]).end()) {
 			for(unsigned int i=0;i<numThreads;i++) {
-				result.abstractDomain.setabstractDomVec[i]=
+        cerr << "hit in aC map for BB = "<< basic_block_ptr <<" op_info* = "<<dst_ptr<<endl;
+        result.abstractDomain.setabstractDomVec[i]=
 					(*iter).second.setabstractDomVec[i].binary_op(CLP_INTERSECT,value.abstractDomain.setabstractDomVec[i]);
 			}
 		}
@@ -328,24 +332,29 @@ void propagateConstraintMap(BasicBlock* cur_ptr, BasicBlock* target_ptr, op_info
 		std::map<op_info *,SetabstractDomVec_t>::iterator iter;
 		for(iter=(abstractConstraintMap[cur_ptr]).begin();iter!=(abstractConstraintMap[cur_ptr]).end();iter++) {
 			SetabstractDomVec_t x;
-			if(special_op && ((*iter).first==special_op)) {
+			cerr << "propagateConstraintMap: iterating over op_info for cur_ptr = "<<cur_ptr<<"; op_info* = "<<(*iter).first<<endl;
+      if(special_op && ((*iter).first==special_op)) {
 				x=(*special_op_val);
 				special_op_added=true;
 			}
 			else
 				x=(*iter).second;
-
+      cerr<< "propagateConstraintMap: x = ";
+      x.print();
+      cerr<<endl;
 			if( (abstractConstraintMapIn.find(target_ptr)==abstractConstraintMapIn.end()) || // target_ptr has no abstract constraints coming in
 
 					((abstractConstraintMapIn[target_ptr]).find((*iter).first)==(abstractConstraintMapIn[target_ptr]).end()) // target_ptr has some abstract constraints, but no entry for op_info* that we are examining
 			  ) 
 			{
-				(abstractConstraintMapIn[target_ptr])[(*iter).first]=x;
+				cerr<<"Adding entry for BB "<<target_ptr<<" op_info* = "<<(*iter).first<<" to acMapIn\n";
+        (abstractConstraintMapIn[target_ptr])[(*iter).first]=x;
 			}
 			else 
 			{ 
 				// target_ptr has abstract constraints already for current op_info*. take union with existing constraints
-				((abstractConstraintMapIn[target_ptr])[(*iter).first])=((abstractConstraintMapIn[target_ptr])[(*iter).first]).binary_op(CLP_UNION,x);
+				cerr<<"Union-ing entry for BB "<<target_ptr<<" op_info* = "<<(*iter).first<<" to acMapIn\n";
+        ((abstractConstraintMapIn[target_ptr])[(*iter).first])=((abstractConstraintMapIn[target_ptr])[(*iter).first]).binary_op(CLP_UNION,x);
 			}
 		}
 	} 
@@ -356,10 +365,12 @@ void propagateConstraintMap(BasicBlock* cur_ptr, BasicBlock* target_ptr, op_info
 		if(abstractConstraintMapIn.find(target_ptr)==abstractConstraintMapIn.end() ||
 				(abstractConstraintMapIn[target_ptr]).find(special_op)==(abstractConstraintMapIn[target_ptr]).end()
 		  ) {
+      cerr<<"(2) Adding entry for BB "<<target_ptr<<" to acMapIn\n";
 			(abstractConstraintMapIn[target_ptr])[special_op]=x;
 		}
 		else { 
 			// take union with existing constraints
+      cerr<<"(2) Union-ing entry for BB "<<target_ptr<<" to acMapIn\n";
 			((abstractConstraintMapIn[target_ptr])[special_op])=((abstractConstraintMapIn[target_ptr])[special_op]).binary_op(CLP_UNION,x);
 		}	
 	}
@@ -506,17 +517,17 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 			// the following instructions could have a BB as operand
 			if(opcode==Instruction::Br) { // br 
 				if(op_vec_ptr->size()==1) { // unconditional branch
-					cerr << "\t\t\t\t Unconditional branch inst \n";
+					cerr << "\t\t\t\t Operand is a BB, Unconditional branch inst \n";
 					propagateConstraintMap(basic_block_ptr,c_op.BasicBlockPtr); // propagate constraints from cur BB to target BB and exit analysis
 					propagateTIDConstraintMap(basic_block_ptr,c_op.BasicBlockPtr);
 					return false; // has_changed = false
 				}
 				else {
-					cerr << "\t\t\t\t Unconditional branch inst \n";
+					cerr << "\t\t\t\t Operand is a BB, conditional branch inst \n";
 					assert(op_vec_ptr->size()==3); // assert that this is a conditional branch
 
 					// add true-path and false-path constraints
-					SetabstractDomVec_t temp_vec1, temp_vec2;
+					SetabstractDomVec_t temp_vec_true, temp_vec_false;
 					llvm::CmpInst::Predicate pred = (*op_vec_ptr)[0]->cmp_pred; // check operand 0 of cond br instruction, which is the condn-flag (result of icmp instruction)
 					if((*op_vec_ptr)[0]->auxilliary_op) {
 						for(unsigned int i=0;i<numThreads;i++) {
@@ -527,21 +538,21 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 							SetabstractDom_t s=((*op_vec_ptr)[0]->cmp_val).setabstractDomVec[i];
 							cerr << "\t\t\t\t^^^^^^^\n";
 							for(it=s.SetabstractDom.begin();it!=s.SetabstractDom.end();it++) {
-								computeConstraints(it->clp,pred,t,f);
+								computeConstraints(it->clp,pred,t,f); // we are generating the aDs for true and false path of this predicate
 								true_constraint.insert(t);
 								false_constraint.insert(f);
 								cerr << "\t\t\t\tTC "; PRINT_CLP(t); cerr << "\n";
 								cerr << "\t\t\t\tFC "; PRINT_CLP(f); cerr << "\n";
 							}
 							cerr << "\t\t\t\t^^^^^^^\n";
-							temp_vec1.setabstractDomVec.push_back(true_constraint);
-							temp_vec2.setabstractDomVec.push_back(false_constraint);
+							temp_vec_true.setabstractDomVec.push_back(true_constraint);
+							temp_vec_false.setabstractDomVec.push_back(false_constraint);
 						}
 						// propagate constraint maps
-						propagateConstraintMap(basic_block_ptr,((*op_vec_ptr)[1])->BasicBlockPtr,(*op_vec_ptr)[0]->auxilliary_op,&temp_vec1);
-						propagateConstraintMap(basic_block_ptr,((*op_vec_ptr)[2])->BasicBlockPtr,(*op_vec_ptr)[0]->auxilliary_op,&temp_vec2);
-						propagateTIDConstraintMap(basic_block_ptr,((*op_vec_ptr)[1])->BasicBlockPtr);
+						propagateConstraintMap(basic_block_ptr,((*op_vec_ptr)[2])->BasicBlockPtr,(*op_vec_ptr)[0]->auxilliary_op,&temp_vec_true); //  op_vec_ptr[2] is true path BB
+						propagateConstraintMap(basic_block_ptr,((*op_vec_ptr)[1])->BasicBlockPtr,(*op_vec_ptr)[0]->auxilliary_op,&temp_vec_false); // false path BB
 						propagateTIDConstraintMap(basic_block_ptr,((*op_vec_ptr)[2])->BasicBlockPtr);
+						propagateTIDConstraintMap(basic_block_ptr,((*op_vec_ptr)[1])->BasicBlockPtr);
 					}
 					else if(((*op_vec_ptr)[0]->cmp_val).setabstractDomVec.size()){	// TID constraint
 						int val1=0;
@@ -559,10 +570,10 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 								val2 |= (1<<i); // enabled on false-path
 							}
 						}
-						propagateConstraintMap(basic_block_ptr,((*op_vec_ptr)[1])->BasicBlockPtr);
 						propagateConstraintMap(basic_block_ptr,((*op_vec_ptr)[2])->BasicBlockPtr);
-						propagateTIDConstraintMap(basic_block_ptr,((*op_vec_ptr)[1])->BasicBlockPtr,val1);
-						propagateTIDConstraintMap(basic_block_ptr,((*op_vec_ptr)[2])->BasicBlockPtr,val2);
+						propagateConstraintMap(basic_block_ptr,((*op_vec_ptr)[1])->BasicBlockPtr);
+						propagateTIDConstraintMap(basic_block_ptr,((*op_vec_ptr)[2])->BasicBlockPtr,val1);
+						propagateTIDConstraintMap(basic_block_ptr,((*op_vec_ptr)[1])->BasicBlockPtr,val2);
 					}
 					else	// FP constraints? do nothing
 					{}
@@ -571,11 +582,11 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 				}
 			}
 			else if(opcode==Instruction::Ret){
-				cerr << "\t\t\t\t Inst is a Return \n";
+				cerr << "\t\t\t\t Operand is a BB, Inst is a Return \n";
 				return false;	// return
 			}
 			else if(opcode==Instruction::PHI) { // phi
-				cerr << "\t\t\t\t Inst is a PHI \n";
+				cerr << "\t\t\t\t Operand is a BB, Inst is a PHI \n";
 				continue;
 			}
 			else
@@ -591,14 +602,24 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 			p.push_back (temp);
 		}
 		else {
-			cerr << "\t\t\t\t Unclasified operand \n";
+			cerr << "\t\t\t\t Unclassified operand \n";
 			// copy the operand
 			p.push_back(c_op);
 		}
 	} // finish iterate over operands
 
 	for(unsigned int i=0;i<p.size();i++){
+    cerr << "\t\t\t\t op_vec_ptr - before applyConstraint, i="<<i<<" : " ;
+    ((*op_vec_ptr)[i])->print();
+    cerr << endl;
+    cerr << "\t\t\t\t p - before applyConstraint, i="<<i<<" : " ;
+    (p[i]).print();
+    cerr << endl;
+
 		p[i]=applyConstraint(basic_block_ptr,(*op_vec_ptr)[i],p[i]);
+    cerr << "\t\t\t\t p - after applyConstraint, i="<<i<<": " ;
+    p[i].print();
+    cerr << endl;
 	}
 
 	// we have the abstract representation of the operands, now compute the symbolic result of the operation 
