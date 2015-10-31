@@ -612,12 +612,12 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
     cerr << "\t\t\t\t op_vec_ptr - before applyConstraint, i="<<i<<" : " ;
     ((*op_vec_ptr)[i])->print();
     cerr << endl;
-    cerr << "\t\t\t\t p - before applyConstraint, i="<<i<<" : " ;
+    cerr << "\t\t\t\t p - before applyConstraint, i="<<i<<" : name = "<<p[i].name.c_str()<<" value : " ;
     (p[i]).print();
     cerr << endl;
 
 		p[i]=applyConstraint(basic_block_ptr,(*op_vec_ptr)[i],p[i]);
-    cerr << "\t\t\t\t p - after applyConstraint, i="<<i<<": " ;
+    cerr << "\t\t\t\t p - after applyConstraint, i="<<i<<" : name = "<<p[i].name.c_str()<<" value : " ;
     p[i].print();
     cerr << endl;
 	}
@@ -702,21 +702,73 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 				std::string name="";
 				unsigned int op_width=p[0].width;
 				clp_t w;
-				FILL_CLP(w,op_width,op_width,1);
-				if(s==3) {
-					start_pos=1;
-					name=p[0].name;
+				FILL_CLP(w,op_width,op_width,1); // w stores the size of address computation (eg. 4 for int array)
+				// p[0] is base address of the aggregate data-structure. Gives width of address calculations
+        // p[1] indexes the pointer value
+        // p[2] .. are further indices into the data structure
+        
+        name = p[0].name;
+        
+        if (name.compare("") != 0) {
+          start_pos=1;
+          cerr << "getelementptr: name = "<<name.c_str()<<endl;
+          cerr<<"getelementptr: w = "; PRINT_CLP(w); cerr<<endl;
+          for(unsigned int i=0;i<numThreads;i++) {
+						clp_t t=(p[start_pos].abstractDomain.setabstractDomVec[i].SetabstractDom.begin())->clp; // indexes to give value of pointer
+            cerr<<"getelementptr: t = "; PRINT_CLP(t); cerr<<endl;
+            clp_t z=(p[start_pos+1].abstractDomain.setabstractDomVec[i].SetabstractDom.begin())->clp; // indexes within the pointer. 
+            cerr<<"getelementptr: z = "; PRINT_CLP(z); cerr<<endl;
+            for(s=start_pos+2;s<p.size();s++) {
+							cerr<<"getelementptr: s = "; PRINT_CLP((p[s].abstractDomain.setabstractDomVec[i].SetabstractDom.begin())->clp); cerr<<endl;
+              z=clp_fn(CLP_ADD,(p[s].abstractDomain.setabstractDomVec[i].SetabstractDom.begin())->clp,z,false);
+              cerr<<"getelementptr: z after = "; PRINT_CLP(z); cerr<<endl;
+            }
+						result.pushToDomVec(abstractDom(clp_fn(CLP_ADD,t,clp_fn(CLP_MULT,z,w,false),false),name)); 
+          }
+        }
+        else { // we need to index wrt first argument
+          start_pos=0;
 					for(unsigned int i=0;i<numThreads;i++) {
-						clp_t t=(p[start_pos].abstractDomain.setabstractDomVec[i].SetabstractDom.begin())->clp;
-						clp_t z=(p[start_pos+1].abstractDomain.setabstractDomVec[i].SetabstractDom.begin())->clp;
-						for(s=start_pos+2;s<p.size();s++)
-							z=clp_fn(CLP_ADD,(p[s].abstractDomain.setabstractDomVec[i].SetabstractDom.begin())->clp,z,false);
+						SetabstractDom_t s;
+						std::set<abstractDom, abstractDomCompare>::iterator it;
+						for(it=(p[start_pos].abstractDomain.setabstractDomVec[i].SetabstractDom.begin());it!=(p[start_pos].abstractDomain.setabstractDomVec[i].SetabstractDom.end());it++) {
+							clp_t t=it->clp;
+							name=it->name;
+							clp_t z=(p[start_pos+1].abstractDomain.setabstractDomVec[i].SetabstractDom.begin())->clp;
+							cerr << "\t\t\t\t##################" << (*op_vec_ptr)[0]->width;// << "\n";
+							//assert ((*op_vec_ptr)[0]->width != 0);
+							PRINT_CLP(w);
+							PRINT_CLP(z);
+							cerr << "\t\t\t\t##################\n";
+							s.insert(abstractDom(clp_fn(CLP_ADD,t,clp_fn(CLP_MULT,z,w,false),false),name));
+						}
+						result.abstractDomain.setabstractDomVec.push_back(s); 
+					}
+        }
+
+        /*
+        if(s >= 3) {
+					start_pos=1;
+          name=p[0].name;
+          cerr << "getelementptr: name = "<<name.c_str()<<endl;
+          cerr<<"getelementptr: w = "; PRINT_CLP(w); cerr<<endl;
+          for(unsigned int i=0;i<numThreads;i++) {
+            // name = (p[0].abstractDomain.setabstractDomVec[i].SetabstractDom.begin())->name.c_str();
+						clp_t t=(p[start_pos].abstractDomain.setabstractDomVec[i].SetabstractDom.begin())->clp; // indexes to give value of pointer
+            cerr<<"getelementptr: t = "; PRINT_CLP(t); cerr<<endl;
+            clp_t z=(p[start_pos+1].abstractDomain.setabstractDomVec[i].SetabstractDom.begin())->clp; // indexes within the pointer. 
+            cerr<<"getelementptr: z = "; PRINT_CLP(z); cerr<<endl;
+            for(s=start_pos+2;s<p.size();s++) {
+							cerr<<"getelementptr: s = "; PRINT_CLP((p[s].abstractDomain.setabstractDomVec[i].SetabstractDom.begin())->clp); cerr<<endl;
+              z=clp_fn(CLP_ADD,(p[s].abstractDomain.setabstractDomVec[i].SetabstractDom.begin())->clp,z,false);
+              cerr<<"getelementptr: z after = "; PRINT_CLP(z); cerr<<endl;
+            }
 						result.pushToDomVec(abstractDom(clp_fn(CLP_ADD,t,clp_fn(CLP_MULT,z,w,false),false),name)); 
 					}
 				}
 				else if(s==2) 
 				{ 
-					start_pos=0;
+          start_pos=0;
 					for(unsigned int i=0;i<numThreads;i++) {
 						SetabstractDom_t s;
 						std::set<abstractDom, abstractDomCompare>::iterator it;
@@ -735,6 +787,8 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 					}
 				}
 				else assert(0);
+        */
+
 				result.width=p[0].width;
 			}
 			break;
@@ -808,7 +862,7 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 	cerr << "\t\t\t\top2: ";
 	op2.print();
 	cerr <<  endl;
-	cerr << "\t\t\t\tresult: ";
+	cerr << "\t\t\t\tresult: name = "<<result.name.c_str()<<" : ";
 	result.print();
 	cerr <<  endl;
 
@@ -867,7 +921,6 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 	dst_ptr->auxilliary_op=result.auxilliary_op;
 	dst_ptr->cmp_val=result.cmp_val;
 	dst_ptr->cmp_pred=cmp_pred;
-
 	dst_ptr->width = result.width;
 
 	return has_changed;
