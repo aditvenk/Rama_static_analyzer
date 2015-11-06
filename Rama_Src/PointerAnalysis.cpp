@@ -4,7 +4,7 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Type.h"
 #include "llvm/Support/CommandLine.h"
-
+#include "llvm/Support/Casting.h"
 #include <sstream>
 
 using namespace llvm;
@@ -371,7 +371,17 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 							// Allocate 
 							op_info* temp_op_info = new op_info;
 							temp_op_info->isPointer = true;
-							temp_op_info->name = (*operand)->getName ().str();
+							if((*operand)->hasName()){
+								temp_op_info->name = (*operand)->getName().str();
+							}
+							else{
+								if(ConstantExpr *gepExpr = dyn_cast<ConstantExpr>(*operand)){
+									if(GetElementPtrInst *gepInst = dyn_cast<GetElementPtrInst>(gepExpr->getAsInstruction())){
+										temp_op_info->name = gepInst->getPointerOperand()->getName().str();
+										gepInst->dropAllReferences();	
+									}
+								}
+							}
 							temp_op_info->width = width;
 							temp_op_info->size = size;
 							temp_op_info->isArray = isArray;
