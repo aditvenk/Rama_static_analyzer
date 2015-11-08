@@ -93,7 +93,7 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 		cerr << "PASS #"<< num_passes<<endl;
 
 		has_changed = false;
-		
+
 		/****************************************Basic Block*********************************/
 		for (Function::iterator i = F.begin(); i != F.end(); i++) {
 			cerr << "BASIC BLOCK: "<<(*i).getName().str() << "\n";
@@ -314,8 +314,8 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 						} 
 						else {
 							cerr << "\t\t\t";
-              InfoMap_iter->second->abstractDomain.print();
-              cerr << endl;
+							InfoMap_iter->second->abstractDomain.print();
+							cerr << endl;
 							// update the width of the operand
 							InfoMap_iter->second->width = width;
 							//cerr << "*" << (InfoMap_iter->second)->width << "*";
@@ -371,30 +371,7 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 							// Allocate 
 							op_info* temp_op_info = new op_info;
 							temp_op_info->isPointer = true;
-							
-              if((*operand)->hasName()){
-								temp_op_info->name = (*operand)->getName().str();
-							}
-							else{
-								if(ConstantExpr *gepExpr = dyn_cast<ConstantExpr>(*operand)){
-									if(GetElementPtrInst *gepInst = dyn_cast<GetElementPtrInst>(gepExpr->getAsInstruction())){
-										temp_op_info->name = gepInst->getPointerOperand()->getName().str();
-
-                    for (User::op_iterator op = (*gepInst).idx_begin(); operand != (*gepInst).idx_end(); op++) {
-                      cerr << "**\t\t\t\t" << (*op)->getName ().str() <<endl;
-                      if(isa<ConstantInt> (*op)) {
-                        cerr<< ((ConstantInt *)&*(*op))->getZExtValue()  <<endl;
-                      }
-                    }
-										gepInst->dropAllReferences();	
-                    temp_op_info->isPointer = false;
-                    temp_op_info->isGEP = true;
-
-
-									}
-								}
-							}
-
+							temp_op_info->name = (*operand)->getName().str();
 							temp_op_info->width = width;
 							temp_op_info->size = size;
 							temp_op_info->isArray = isArray;
@@ -480,7 +457,7 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 		// If we have iterated over the code for more than the specified number of times then it is time
 		// to widen the ranges and bring the analysis to closure. So we'll initiate a special procedure as
 		// below. After this we should be terminating.
-		
+
 		if ((num_passes == NUM_TRIALS)&&(!widened)) {
 			// Widen the range of each op_info in our map
 			InstrToInfoMap::iterator InfoMap_iter;
@@ -528,56 +505,56 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 
 bool PointerAnalysis::analyzeFunctions(Module &M) {
 	Function* func = M.getFunction("pthread_create");
-  bool multi_threaded_analysis = false; 
-  set <Function*> thread_functions; // Holds Function* called as part of pthread_create
-  pair < set <Function*>::iterator, bool > ret;
-  vector <FunctionAnalysis*> threadF_vec;
+	bool multi_threaded_analysis = false; 
+	set <Function*> thread_functions; // Holds Function* called as part of pthread_create
+	pair < set <Function*>::iterator, bool > ret;
+	vector <FunctionAnalysis*> threadF_vec;
 
 	FunctionAnalysis mainF;
 	if (func == 0) {
 		cerr << "pthread_create not found" << endl;
 		// return false; // HACK
 	}
-  else {
-    multi_threaded_analysis = true;
-    cerr << "pthread_create found = "<< func->getName().str() << endl;
-    
-	  // iterate through each CallInst of pthread_create and identify thread's function. 
-	  for (Use &U : func->uses()) {
-	    User *UR = U.getUser();
-	    if (CallInst *CI = cast<CallInst>(UR)) {
-	      Value* fn_arg = CI->getOperand(2);
-	      errs() << "pthread create called with :" << fn_arg->getName().str() << "\n";
-	      ret = thread_functions.insert (M.getFunction(fn_arg->getName()));
-        // If the function was not already in the set
-        if (ret.second == true) {
-          FunctionAnalysis* threadF = new FunctionAnalysis;
-          threadF->setName (fn_arg->getName());
-          threadF_vec.push_back (threadF);
-          cerr << "pushing " << fn_arg->getName().str() << " to threadF_vec "<<endl;
-        }
-      }
-      else {
-        cerr << "use of pthread_create was not a CallInst!"<<endl;
-      }
-    }
-  }
+	else {
+		multi_threaded_analysis = true;
+		cerr << "pthread_create found = "<< func->getName().str() << endl;
 
-  // now call abstractCompute on the main function and each thread function
-  bool changed = true;
-  while (changed == true) {
-  	changed = mainF.processFunction ( *(M.getFunction ("main")) , true); // isSerial = true
-    cerr<<"Main analysis over. changed = "<<changed<<endl;
-    if (multi_threaded_analysis) {
-      std::set < Function *>::iterator f_it;
-      unsigned i=0;
-      for (f_it = thread_functions.begin (); f_it != thread_functions.end (); f_it++) {
-        changed |= threadF_vec[i]->processFunction (*(*f_it), false);
-        i++;
-      }
-    }
-  }
-  return false;
+		// iterate through each CallInst of pthread_create and identify thread's function. 
+		for (Use &U : func->uses()) {
+			User *UR = U.getUser();
+			if (CallInst *CI = cast<CallInst>(UR)) {
+				Value* fn_arg = CI->getOperand(2);
+				errs() << "pthread create called with :" << fn_arg->getName().str() << "\n";
+				ret = thread_functions.insert (M.getFunction(fn_arg->getName()));
+				// If the function was not already in the set
+				if (ret.second == true) {
+					FunctionAnalysis* threadF = new FunctionAnalysis;
+					threadF->setName (fn_arg->getName());
+					threadF_vec.push_back (threadF);
+					cerr << "pushing " << fn_arg->getName().str() << " to threadF_vec "<<endl;
+				}
+			}
+			else {
+				cerr << "use of pthread_create was not a CallInst!"<<endl;
+			}
+		}
+	}
+
+	// now call abstractCompute on the main function and each thread function
+	bool changed = true;
+	while (changed == true) {
+		changed = mainF.processFunction ( *(M.getFunction ("main")) , true); // isSerial = true
+		cerr<<"Main analysis over. changed = "<<changed<<endl;
+		if (multi_threaded_analysis) {
+			std::set < Function *>::iterator f_it;
+			unsigned i=0;
+			for (f_it = thread_functions.begin (); f_it != thread_functions.end (); f_it++) {
+				changed |= threadF_vec[i]->processFunction (*(*f_it), false);
+				i++;
+			}
+		}
+	}
+	return false;
 }
 
 bool PointerAnalysis::doInitialization(Module &M) {
