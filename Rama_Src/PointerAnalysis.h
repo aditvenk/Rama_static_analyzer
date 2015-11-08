@@ -438,6 +438,7 @@ namespace Rama {
 			isAlloca(false),
 			isArray(false),
 			isCall(false),
+      isGEP(false),
 			auxilliary_op(NULL),
 			try_widen(false)
 		{
@@ -467,6 +468,7 @@ namespace Rama {
 				isBasicBlockPtr=rhs.isBasicBlockPtr;
 				isFunctionPtr=rhs.isFunctionPtr;
 				isPointer=rhs.isPointer;
+        isGEP=rhs.isGEP;
 				isAlloca=rhs.isAlloca;
 				isCall=rhs.isCall;
 
@@ -533,6 +535,7 @@ namespace Rama {
 			bool isBasicBlockPtr;
 			bool isFunctionPtr;
 			bool isPointer;
+      bool isGEP;
 			bool isAlloca;
 			bool isArray;
 			bool isCall; // set if it is a call instruction. name will give the function name

@@ -1,9 +1,7 @@
 #include <cstdlib>
 #include <iostream>
-
+int gl[2] = {5,6}; 
+int a=1;
 int main() {
-  int i;
-  for (i=0; i<5; i++) {
-  }
-  return i;
+  return gl[a];
 }

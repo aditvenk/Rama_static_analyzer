@@ -433,7 +433,6 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 
 	op_info c_op;
 
-
 	// iterate over each operand and process the operands to obtain their corresponding representation in the abstract domain
 	for(iter=op_vec_ptr->begin();iter!=op_vec_ptr->end();iter++) {
 
@@ -469,12 +468,18 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 			cerr << "\t\t\t\t Operand is a TID \n";
 			op_info temp;
 			temp=c_op;
+      cerr<<"c_op = "; 
+      temp.print();
+      cerr<<endl;
 			temp.isTID=true;
 			temp.abstractDomain.clear();
 			for(unsigned int i=0;i<numThreads;i++) {
 				abstractDom k(i,i,1);
 				temp.pushToDomVec(k);
 			}
+      cerr<<"temp after = ";
+      temp.print();
+      cerr<<endl;
 			p.push_back(temp);
 		}
 		// case where operand is a literal
@@ -511,6 +516,11 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 			}
 			p.push_back(temp);						
 		}
+    else if(c_op.isGEP) {
+      cerr<<"\t\t\t\t Operand is result of GEP. Need to evaluate GEP first \n";
+
+    }
+
 		// case where operand is a basic block pointer
 		else if(c_op.isBasicBlockPtr) {
 			cerr << "\t\t\t\t Operand is a Basic Block \n";
@@ -801,11 +811,14 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 			   case 36:
 			   case 31:
 			   case 32:
-			   case 29: // zero extend. TODO: check if this is correct
-			   case 30: // sign extend. TODO: check if this is correct 
+      */
+			   
+    case Instruction::ZExt: // zero extend. TODO: check if this is correct
+		case Instruction::SExt: // sign extend. TODO: check if this is correct 
 			   op1=p[0];
 			   result=op1;
 			   break;
+         /*
 			   case 38: // int to ptr. TODO: check if this is correct
 			   case 37: // ptr to int. TODO: check if this is correct
 			   op1=p[0]; 
