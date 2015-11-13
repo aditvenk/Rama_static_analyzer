@@ -14,10 +14,12 @@
 char InlineFunctions::ID = 0;
 
 // Register the pass
-static RegisterPass<InlineFunctions> X("inline", "inline functions", true, false);
+static RegisterPass<InlineFunctions> X("rama_inline", "Merge Non-Pthread Creates");
 
 // define the inline function called as a part of the runonmodule callback
 bool InlineFunctions::inlineFnsInModule (Module &M) {
+	
+	std::set <Function*> threads; // Holds Function*s that are called within the body of pthread_create - why is this called threads? - not every function here from a new thread?
 	// Main is now a handle to the pthread_create function object.
 	// Can there not be more than one pthread_create in the module?
 	Function *Main = M.getFunction ("pthread_create");
@@ -26,12 +28,15 @@ bool InlineFunctions::inlineFnsInModule (Module &M) {
 		return false;
 	}
 	cerr << "pthread_create found = " << Main->getName().str() << std::endl; 
-	std::set <Function*> threads; // Holds Function*s that are called within the body of pthread_create - why is this called threads? - not every function here from a new thread?
+	
+	/* This entire block of code does not appear to do anything as the bitcode only contains a declaration of the pthread_create function and not the actual calls that are made by the p_thread
+ 	 * as this code seems to assume. So not sure what we are iterating over - NN 	
 	// value is a superclass of User (instruction) and Function
 	Value::use_iterator vu_it;
 	// Iterate over all uses(instructions) of the pthread_create and collect the thread functions 
 	// called from there.
 	for (vu_it = Main->use_begin (); vu_it != Main->use_end (); vu_it++) {
+		(*vu_it)->dump();
 		if ( CallInst* callInst = dyn_cast <CallInst> (*vu_it) ) {
 			// should we check for declarations and NULL functions and ignore them?
 			//if ( !callInst->isDeclaration() ) {
@@ -45,9 +50,9 @@ bool InlineFunctions::inlineFnsInModule (Module &M) {
 			cerr << "Use of pthread_create was not a CallInst!\n";
 		}
 	}
+	*/
 
 	CallGraph &CG = getAnalysis<CallGraphWrapperPass>().getCallGraph();
-
 	// Performs inlining of the main module
 	// Create a reverse post order list of functions in the program (the functions in the program taken together represent the call graph)
 	// The reverse of a post order traversal is a pre-order traversal where the right subtree is visited first
@@ -62,12 +67,12 @@ bool InlineFunctions::inlineFnsInModule (Module &M) {
 			cerr << "rpo fn = " << F->getName().str() << std::endl;
 			// collect all functions that are not pthread_create nor the starting thread functions
 			// these are the functions that will be marked for inlining
-			if ( (F->getName () != "pthread_create") & (threads.find ( F ) == threads.end ()) ) {
+			if ((F->getName () != "pthread_create") & (threads.find ( F ) == threads.end ()) & (F->getName () != "main") ) {//assuming we are not going to name any other function main
 				rpo_fns.push_back ( F );
 			}
 		}
 	}
-
+	
 	// Now go through the list and mark all functions, except the "main" function
 	// for inlining. - where does the actual inlining take place?
 	for (unsigned j = 1; j < rpo_fns.size(); j++) {

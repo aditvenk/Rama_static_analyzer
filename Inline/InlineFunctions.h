@@ -4,7 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-// Note that this is a ModulePass and not a FunctionPass - also defined in inlineFunctions namespace
+// Note that this is a ModulePass and not a FunctionPass
 
 #include "llvm/Pass.h"
 #include "llvm/IR/Function.h"
@@ -51,7 +51,7 @@ class InlineFunctions : public ModulePass {
 		// after each call to runOnFunction.
 		//**********************************************************************
 		virtual void print(std::ostream &O, const Module *M) const {
-			O << "This is abstractAnalysis.\n";
+			O << "This is inline Analysis.\n";
 		}
 
 		//**********************************************************************
@@ -65,7 +65,7 @@ class InlineFunctions : public ModulePass {
 		};
 
 	private:
-		//defined in processFunction.cpp
+		//defined in InlineFunctions.cpp
 		bool inlineFnsInModule (Module &);
 };
 #endif
