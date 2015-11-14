@@ -525,13 +525,23 @@ bool PointerAnalysis::analyzeFunctions(Module &M) {
 			if (CallInst *CI = cast<CallInst>(UR)) {
 				Value* fn_arg = CI->getOperand(2);
 				errs() << "pthread create called with :" << fn_arg->getName().str() << "\n";
-				ret = thread_functions.insert (M.getFunction(fn_arg->getName()));
+				string threadFunction;
+				Function *worker = M.getFunction(fn_arg->getName().str());
+				for (Function::iterator i = worker->begin(); i != worker->end(); i++) {
+					for (BasicBlock::iterator b = (*i).begin(); b != (*i).end(); b++) {
+						if (CallInst* callInst = dyn_cast <CallInst> (b) ) {
+							//cerr << "found a callinst of " << callInst->getCalledFunction()->getName().str() << std::endl;
+							threadFunction = callInst->getCalledFunction()->getName().str();
+						}
+					} 		
+				}
+				ret = thread_functions.insert(M.getFunction(threadFunction));
 				// If the function was not already in the set
 				if (ret.second == true) {
 					FunctionAnalysis* threadF = new FunctionAnalysis;
-					threadF->setName (fn_arg->getName());
+					threadF->setName (threadFunction);
 					threadF_vec.push_back (threadF);
-					cerr << "pushing " << fn_arg->getName().str() << " to threadF_vec "<<endl;
+					cerr << "pushing " << threadFunction << " to threadF_vec "<<endl;
 				}
 			}
 			else {
@@ -539,7 +549,7 @@ bool PointerAnalysis::analyzeFunctions(Module &M) {
 			}
 		}
 	}
-
+	
 	// now call abstractCompute on the main function and each thread function
 	bool changed = true;
 	while (changed == true) {
