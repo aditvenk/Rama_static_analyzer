@@ -228,7 +228,7 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 					//cerr << "Found alloca";
 					AllocaInst* a_inst = dyn_cast<AllocaInst> (b);
 					cerr << "\t\talloca name = " << op_info_struct->name << (a_inst->getArraySize())->getName().str() << "  ";
-					cerr << "array size = " << (a_inst->getAllocatedType())->getArrayNumElements() << endl;
+					// cerr << "array size = " << (a_inst->getAllocatedType())->getArrayNumElements() << endl;
 				}
 
 				int temp_op_itr = 0;//keep track of the number of operands 
@@ -417,8 +417,8 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 						op_info* temp_op_info = new op_info;
 						perInstrOpInfo->push_back (temp_op_info);
 						cerr << "\t\t\t"<<(*operand)->getName ().str() << ": Found an operand that is not instruction/literal/basic block/tid. Skipping " <<endl;
-						(*operand)->getType()->dump();
-						cerr << (*operand)->getType()->getStructName().str() << (*operand)->getType()->getTypeID() << " " << "\n"; //(*operand)->getType()->getContainedType(0) <<"\n";
+						// (*operand)->getType()->dump();
+						// cerr << (*operand)->getType()->getStructName().str() << (*operand)->getType()->getTypeID() << " " << "\n"; //(*operand)->getType()->getContainedType(0) <<"\n";
 						//cerr << "\n";
 						//exit (-1);
 						continue;

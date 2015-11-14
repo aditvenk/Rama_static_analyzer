@@ -468,18 +468,18 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 			cerr << "\t\t\t\t Operand is a TID \n";
 			op_info temp;
 			temp=c_op;
-      cerr<<"c_op = "; 
-      temp.print();
-      cerr<<endl;
+      // cerr<<"c_op = "; 
+      // temp.print();
+      // cerr<<endl;
 			temp.isTID=true;
 			temp.abstractDomain.clear();
 			for(unsigned int i=0;i<numThreads;i++) {
 				abstractDom k(i,i,1);
 				temp.pushToDomVec(k);
 			}
-      cerr<<"temp after = ";
-      temp.print();
-      cerr<<endl;
+      // cerr<<"temp after = ";
+      // temp.print();
+      // cerr<<endl;
 			p.push_back(temp);
 		}
 		// case where operand is a literal
@@ -518,7 +518,7 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 		}
     else if(c_op.isGEP) {
       cerr<<"\t\t\t\t Operand is result of GEP. Need to evaluate GEP first \n";
-
+      exit(1);
     }
 
 		// case where operand is a basic block pointer
@@ -527,13 +527,13 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 			// the following instructions could have a BB as operand
 			if(opcode==Instruction::Br) { // br 
 				if(op_vec_ptr->size()==1) { // unconditional branch
-					cerr << "\t\t\t\t Operand is a BB, Unconditional branch inst \n";
+					// cerr << "\t\t\t\t Operand is a BB, Unconditional branch inst \n";
 					propagateConstraintMap(basic_block_ptr,c_op.BasicBlockPtr); // propagate constraints from cur BB to target BB and exit analysis
 					propagateTIDConstraintMap(basic_block_ptr,c_op.BasicBlockPtr);
 					return false; // has_changed = false
 				}
 				else {
-					cerr << "\t\t\t\t Operand is a BB, conditional branch inst \n";
+					// cerr << "\t\t\t\t Operand is a BB, conditional branch inst \n";
 					assert(op_vec_ptr->size()==3); // assert that this is a conditional branch
 
 					// add true-path and false-path constraints
@@ -619,17 +619,17 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 	} // finish iterate over operands
 
 	for(unsigned int i=0;i<p.size();i++){
-    cerr << "\t\t\t\t op_vec_ptr - before applyConstraint, i="<<i<<" : " ;
-    ((*op_vec_ptr)[i])->print();
-    cerr << endl;
-    cerr << "\t\t\t\t p - before applyConstraint, i="<<i<<" : name = "<<p[i].name.c_str()<<" value : " ;
-    (p[i]).print();
-    cerr << endl;
+    // cerr << "\t\t\t\t op_vec_ptr - before applyConstraint, i="<<i<<" : " ;
+    // ((*op_vec_ptr)[i])->print();
+    // cerr << endl;
+    // cerr << "\t\t\t\t p - before applyConstraint, i="<<i<<" : name = "<<p[i].name.c_str()<<" value : " ;
+    // (p[i]).print();
+    // cerr << endl;
 
 		p[i]=applyConstraint(basic_block_ptr,(*op_vec_ptr)[i],p[i]);
-    cerr << "\t\t\t\t p - after applyConstraint, i="<<i<<" : name = "<<p[i].name.c_str()<<" value : " ;
-    p[i].print();
-    cerr << endl;
+    // cerr << "\t\t\t\t p - after applyConstraint, i="<<i<<" : name = "<<p[i].name.c_str()<<" value : " ;
+    // p[i].print();
+    // cerr << endl;
 	}
 
 	// we have the abstract representation of the operands, now compute the symbolic result of the operation 
@@ -721,17 +721,17 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
         
         if (name.compare("") != 0) {
           start_pos=1;
-          cerr << "getelementptr: name = "<<name.c_str()<<endl;
-          cerr<<"getelementptr: w = "; PRINT_CLP(w); cerr<<endl;
+          // cerr << "getelementptr: name = "<<name.c_str()<<endl;
+          // cerr<<"getelementptr: w = "; PRINT_CLP(w); cerr<<endl;
           for(unsigned int i=0;i<numThreads;i++) {
 						clp_t t=(p[start_pos].abstractDomain.setabstractDomVec[i].SetabstractDom.begin())->clp; // indexes to give value of pointer
-            cerr<<"getelementptr: t = "; PRINT_CLP(t); cerr<<endl;
+            // cerr<<"getelementptr: t = "; PRINT_CLP(t); cerr<<endl;
             clp_t z=(p[start_pos+1].abstractDomain.setabstractDomVec[i].SetabstractDom.begin())->clp; // indexes within the pointer. 
-            cerr<<"getelementptr: z = "; PRINT_CLP(z); cerr<<endl;
+            // cerr<<"getelementptr: z = "; PRINT_CLP(z); cerr<<endl;
             for(s=start_pos+2;s<p.size();s++) {
-							cerr<<"getelementptr: s = "; PRINT_CLP((p[s].abstractDomain.setabstractDomVec[i].SetabstractDom.begin())->clp); cerr<<endl;
+							// cerr<<"getelementptr: s = "; PRINT_CLP((p[s].abstractDomain.setabstractDomVec[i].SetabstractDom.begin())->clp); cerr<<endl;
               z=clp_fn(CLP_ADD,(p[s].abstractDomain.setabstractDomVec[i].SetabstractDom.begin())->clp,z,false);
-              cerr<<"getelementptr: z after = "; PRINT_CLP(z); cerr<<endl;
+              // cerr<<"getelementptr: z after = "; PRINT_CLP(z); cerr<<endl;
             }
 						result.pushToDomVec(abstractDom(clp_fn(CLP_ADD,t,clp_fn(CLP_MULT,z,w,false),false),name)); 
           }
