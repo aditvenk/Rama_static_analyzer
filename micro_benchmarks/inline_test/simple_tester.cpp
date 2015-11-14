@@ -2,10 +2,13 @@
 #include <iostream>
 #include <pthread.h>
 
+using namespace std;
+
 int work_array[1000];
 
 int a_func(int param){
-	int var = 0;
+	int var;
+	cin>>var;
 	if(var > param)
 		return var;
 	else
@@ -13,7 +16,8 @@ int a_func(int param){
 }
 
 int b_func(int param){
-	int var = 100;
+	int var;
+	cin>>var;
 	if(var > param)
 		return param;
 	else
@@ -36,7 +40,9 @@ void* worker_func(void* tid_ptr) {
 
 void* worker_func_2(void* tid_ptr) {
 	int id = *(int*) tid_ptr;
-	work_array[id] = (int)c_func(0);
+	int in;
+	cin>>in;	
+	work_array[id] = (int)c_func(in);
 	return NULL;
 }
 

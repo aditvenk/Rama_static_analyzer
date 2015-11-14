@@ -14,5 +14,5 @@ emit: simple_tester.cpp
 	clang++ -O0 -emit-llvm simple_tester.cpp -S -o simple_tester.ll
 
 clean:
-	rm -rf simple_tester simple_tester.bc simple_tester.ll simple_tester.optbc simple_tester.optbc.ll out.txt
+	rm -rf simple_tester simple_tester.bc simple_tester.ll simple_tester.optbc simple_tester.optbc.ll simple_tester.optbc_inline simple_tester.optbc_inline.ll simple_tester.optbc2 simple_tester.optbc_inlined simple_tester.optbc_inlined.ll out.txt
 
