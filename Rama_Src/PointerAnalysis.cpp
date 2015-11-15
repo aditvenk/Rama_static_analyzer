@@ -531,6 +531,8 @@ bool PointerAnalysis::analyzeFunctions(Module &M) {
 						if (CallInst* callInst = dyn_cast <CallInst> (b) ) {
 							//cerr << "found a callinst of " << callInst->getCalledFunction()->getName().str() << std::endl;
 							threadFunction = callInst->getCalledFunction()->getName().str();
+              if (threadFunction.find("tid") != string::npos) 
+                break;
 						}
 					} 		
 				}
@@ -552,7 +554,7 @@ bool PointerAnalysis::analyzeFunctions(Module &M) {
 	// now call abstractCompute on the main function and each thread function
 	bool changed = true;
 	while (changed == true) {
-		changed = mainF.processFunction ( *(M.getFunction ("main")) , false); // isSerial = true
+		changed = mainF.processFunction ( *(M.getFunction ("main")) , true); // isSerial = true
 		cerr<<"Main analysis over. changed = "<<changed<<endl;
 		if (multi_threaded_analysis) {
 			std::set < Function *>::iterator f_it;
