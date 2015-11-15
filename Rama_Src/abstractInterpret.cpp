@@ -818,6 +818,10 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 			   op1=p[0];
 			   result=op1;
 			   break;
+    case Instruction::SIToFP: // signed integer to double
+         op1 = p[0];
+         result = op1;
+         break; 
          /*
 			   case 38: // int to ptr. TODO: check if this is correct
 			   case 37: // ptr to int. TODO: check if this is correct
@@ -861,7 +865,7 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 			break;
 		default:
 			cerr << "\t\t\t\tUnimplemented opcode " << opcode << " \n";
-			assert(0);
+			// assert(0);
 			op1=p[0];
 			result=op1;
 

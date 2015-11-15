@@ -392,7 +392,6 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 						temp_op_info->width = width;
 						perInstrOpInfo->push_back (temp_op_info);
 						cerr << "\t\t\tFound tid operand"<<endl;
-						exit(1); // TODO Remove this once you understand when this code is executed
 					}
 					// case of operand being a floating point
 					else if ( isa<ConstantFP> (*operand) ) {
@@ -553,7 +552,7 @@ bool PointerAnalysis::analyzeFunctions(Module &M) {
 	// now call abstractCompute on the main function and each thread function
 	bool changed = true;
 	while (changed == true) {
-		changed = mainF.processFunction ( *(M.getFunction ("main")) , true); // isSerial = true
+		changed = mainF.processFunction ( *(M.getFunction ("main")) , false); // isSerial = true
 		cerr<<"Main analysis over. changed = "<<changed<<endl;
 		if (multi_threaded_analysis) {
 			std::set < Function *>::iterator f_it;

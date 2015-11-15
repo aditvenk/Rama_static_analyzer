@@ -1,30 +1,17 @@
-#include <cstdlib>
-#include <iostream>
-#include <pthread.h>
+#include<pthread.h>
 
-#define NUM_THREADS 2
+#define NUMTHREADS 4
+#define ARRAYSIZE 32
+#define CHUNKSIZE 8 
 
-int work_array[NUM_THREADS];
-int tids[NUM_THREADS];
+int a [ARRAYSIZE];
 
-void* worker_func ( void* tid_ptr) {
-  int id = *(int*) tid_ptr;
-  work_array[tid] = 5;
-  return NULL;
-}
-
-int main() {
-  int i;
-  int th[2];
-  th[0] = 0;
-  th[1] = 1;
-  pthread_t t[NUM_THREADS];
-  for (i=0; i<NUM_THREADS; i++) {
-    pthread_create(&t[i], NULL, &worker_func, (void*) &th[i]);
-  }
-  
-  for (i=0; i<NUM_THREADS; i++) {
-    pthread_join(t[i], NULL);
+int main (int tid) {
+	int i;
+  int j;
+  j = tid*CHUNKSIZE;
+  for (i=0; i<CHUNKSIZE; i++) {
+    a[j] = a[j] + 1;
   }
 
   return 0;

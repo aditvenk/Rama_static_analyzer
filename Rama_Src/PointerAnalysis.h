@@ -20,7 +20,7 @@ using namespace std;
 
 // global macros go here
 #define DEBUG_TYPE "PointerAnalysis"
-#define NUM_THREADS   1
+#define NUM_THREADS   2
 #define NUM_TRIALS    1000
 #define POST_WIDEN_TRIALS   1000
 
