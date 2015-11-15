@@ -56,6 +56,33 @@ void FunctionAnalysis::addToWriteSet ( SetabstractDomVec_t &ip ) {
 	wr_set.insert (ip);
 }
 
+void FunctionAnalysis::computeConflicts () {
+    // Now compute conflicts between the read and write sets
+    //op_info_set::iterator l, m;
+    std::set < SetabstractDomVec_t >::iterator l, m;
+      for (l = rd_set.begin (); l != rd_set.end (); l++) {
+      for (m = wr_set.begin (); m != wr_set.end (); m++) {
+	      rd_wr_conflicts.insert ( (*l).crossVec_intersect (*m) );
+      }
+    }
+
+    // Now compute conflicts between the elements of the write sets
+    for (l = wr_set.begin (); l != wr_set.end (); l++) {
+      for (m = l; m != wr_set.end (); m++) {
+	      wr_wr_conflicts.insert ( (*l).crossVec_intersect (*m) );
+      }
+    }
+
+    // Now print the conflics
+    cerr << "Function " << name << ": Conflicts between Read and Write Sets: \n"; 
+    rd_wr_conflicts.print ();
+    cerr << "\n";
+    cerr << "Function " << name << ": Conflicts between Write and Write Sets: \n"; 
+    wr_wr_conflicts.print ();
+    cerr << "\n";
+  }
+
+
 
 // this function is called on each High Level Function -- i.e. Main and each WorkerThreadFunction. Each high-level function corresponds to a thread
 // so if the program had 5 pthread_create functions, this function will be called with the 6 different high level functions as argument
@@ -563,6 +590,11 @@ bool PointerAnalysis::analyzeFunctions(Module &M) {
 				changed |= threadF_vec[i]->processFunction (*(*f_it), false);
 				i++;
 			}
+      
+      for (unsigned i = 0; i < threadF_vec.size (); i++) {
+        threadF_vec[i]->computeConflicts ();
+      }
+
 		}
 	}
 	return false;
