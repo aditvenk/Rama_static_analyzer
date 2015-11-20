@@ -277,7 +277,7 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 					widthInBits = dataType->getPrimitiveSizeInBits();
 
 					// If the type is of pointer then the above getPrimitiveSizeInBits() function does not work. We first need to find the data type it points to
-					if ( dataType->getTypeID() == Type::PointerTyID ) {
+					if (dataType->getTypeID() == Type::PointerTyID ) {
 						dataType = dataType->getContainedType (0);
 
 						// If the type is a pointer to a pointer then we need to find the data type it points to
@@ -389,14 +389,23 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 							cerr << "\t\t\t" << (*operand)->getType()->getTypeID() << " CT = " << ((*operand)->getType()->getContainedType(0))->getTypeID() << " width = " << ((*operand)->getType()->getContainedType(0))->getPrimitiveSizeInBits() <<endl;
 							int size = 1;
 							bool isArray = false;
-
+							op_info* temp_op_info = new op_info;
 							if (((*operand)->getType()->getContainedType(0))->getTypeID() == Type::ArrayTyID) {
 								cerr << "\t\t\t** Found Array ** "<<endl;
 								isArray = true;
 								size = ((ArrayType *)&*((*operand)->getType()->getContainedType(0)))->getNumElements();
+								// check if operand is 2-d array
+								if(((*operand)->getType()->getContainedType(0))->getContainedType(0)->getTypeID()== Type::ArrayTyID) {
+									// check if instruction is a getelementptr - we are indexing into a 2-d array
+									if ((*b).getOpcode( ) == Instruction::GetElementPtr) {
+										ArrayType* arrayType = dyn_cast<ArrayType>(((*operand)->getType()->getContainedType(0))->getContainedType(0));
+										widthInBits = arrayType->getElementType()->getPrimitiveSizeInBits();
+										width = (unsigned) ceil ( (float) ( widthInBits )/8 ); 
+										width =  width*(arrayType->getNumElements());
+									}
+								}
 							}
 							// Allocate 
-							op_info* temp_op_info = new op_info;
 							temp_op_info->isPointer = true;
 							temp_op_info->name = (*operand)->getName().str();
 							temp_op_info->width = width;
@@ -405,7 +414,6 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 							// Note that the operand_map is getting updated only in the case the pointer is to an array
 							operand_map [(*operand)->getName ()] = temp_op_info;
 							perInstrOpInfo->push_back (temp_op_info);
-
 						} 
 						else {
 							perInstrOpInfo->push_back(OpMap_iter->second);
