@@ -426,6 +426,7 @@ namespace Rama {
 			valueFP(0.0),
 			size(1),
 			width(0),
+			noOfColumns(-1),
 			name(""),
 			BasicBlockPtr(NULL),
 			FunctionPtr(NULL),
@@ -438,7 +439,7 @@ namespace Rama {
 			isAlloca(false),
 			isArray(false),
 			isCall(false),
-      isGEP(false),
+      			isGEP(false),
 			auxilliary_op(NULL),
 			try_widen(false)
 		{
@@ -525,6 +526,7 @@ namespace Rama {
 			double valueFP; 
 			int size;
 			int width;
+			int noOfColumns;
 			string name;
 
 			BasicBlock* BasicBlockPtr;

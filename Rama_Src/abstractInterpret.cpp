@@ -760,13 +760,26 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 					for(unsigned int i=0;i<numThreads;i++) {
 						clp_t t=(p[start_pos].abstractDomain.setabstractDomVec[i].SetabstractDom.begin())->clp; // indexes to give value of pointer
 						clp_t z=(p[start_pos+1].abstractDomain.setabstractDomVec[i].SetabstractDom.begin())->clp; // indexes within the pointer. 
+						/*
 						for(s=start_pos+2;s<p.size();s++) {
-							// Does this loop even get executed - dont think so
+							// Does this loop even get executed - dont think so - seems like it does get executed when getelemptr has > 2 operands
 							// cerr<<"getelementptr: s = "; PRINT_CLP((p[s].abstractDomain.setabstractDomVec[i].SetabstractDom.begin())->clp); cerr<<endl;
 							z=clp_fn(CLP_ADD,(p[s].abstractDomain.setabstractDomVec[i].SetabstractDom.begin())->clp,z,false);
 							// cerr<<"getelementptr: z after = "; PRINT_CLP(z); cerr<<endl;
+						}*/
+						// I don't think we are going to see getElemPtr instructions with 5 operands so just handling case of 2,3 operands
+						if(p.size() == 3){
+							result.pushToDomVec(abstractDom(clp_fn(CLP_ADD,t,clp_fn(CLP_MULT,z,w,false),false),name));
 						}
-						result.pushToDomVec(abstractDom(clp_fn(CLP_ADD,t,clp_fn(CLP_MULT,z,w,false),false),name)); 
+						if(p.size() == 4){
+							unsigned element_width = (*op_vec_ptr)[0]->noOfColumns;
+							clp_t el_w;
+							FILL_CLP(el_w, element_width, element_width, 1);
+							clp_t third = clp_fn(CLP_MULT, (p[start_pos+2].abstractDomain.setabstractDomVec[i].SetabstractDom.begin())->clp, el_w, false);
+							z = clp_fn(CLP_MULT, z, w, false);
+							z = clp_fn(CLP_ADD, z, third, false);
+							result.pushToDomVec(abstractDom(clp_fn(CLP_ADD, t, z, false),name));
+						}
 					}
 				}
 				else { // we need to index wrt first argument

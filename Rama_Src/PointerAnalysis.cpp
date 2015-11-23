@@ -402,6 +402,7 @@ bool FunctionAnalysis::processFunction (Function& F, bool isSerial) { // second 
 										widthInBits = arrayType->getElementType()->getPrimitiveSizeInBits();
 										width = (unsigned) ceil ( (float) ( widthInBits )/8 ); 
 										width =  width*(arrayType->getNumElements());
+										temp_op_info->noOfColumns = arrayType->getNumElements(); 
 									}
 								}
 							}
