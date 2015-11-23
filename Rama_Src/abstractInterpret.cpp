@@ -371,10 +371,9 @@ void propagateConstraintMap(BasicBlock* cur_ptr, BasicBlock* target_ptr, op_info
 			{ 
 				// target_ptr has abstract constraints already for current op_info*. take union with existing constraints
 				cerr<<"Intersecting entry for BB "<<target_ptr<<" op_info* = "<<(*iter).first<<" to acMapIn\n";
-				// This was a Union operation initially. Not sure why Union - changed to intersect - NN
-				// What if the intersection is NULL
-				// I think the intersection should not be null - put in an assert to check this?
-				((abstractConstraintMapIn[target_ptr])[(*iter).first])=((abstractConstraintMapIn[target_ptr])[(*iter).first]).binary_op(CLP_INTERSECT,x);
+				// Should this be an intersection?
+				//((abstractConstraintMapIn[target_ptr])[(*iter).first])=((abstractConstraintMapIn[target_ptr])[(*iter).first]).binary_op(CLP_INTERSECT,x);
+				((abstractConstraintMapIn[target_ptr])[(*iter).first])=((abstractConstraintMapIn[target_ptr])[(*iter).first]).binary_op(CLP_UNION,x);
 			}
 		}
 	} 
