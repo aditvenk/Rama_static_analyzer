@@ -370,9 +370,7 @@ void propagateConstraintMap(BasicBlock* cur_ptr, BasicBlock* target_ptr, op_info
 			else 
 			{ 
 				// target_ptr has abstract constraints already for current op_info*. take union with existing constraints
-				cerr<<"Intersecting entry for BB "<<target_ptr<<" op_info* = "<<(*iter).first<<" to acMapIn\n";
-				// Should this be an intersection?
-				//((abstractConstraintMapIn[target_ptr])[(*iter).first])=((abstractConstraintMapIn[target_ptr])[(*iter).first]).binary_op(CLP_INTERSECT,x);
+				cerr<<"Unioning entry for BB "<<target_ptr<<" op_info* = "<<(*iter).first<<" to acMapIn\n";
 				((abstractConstraintMapIn[target_ptr])[(*iter).first])=((abstractConstraintMapIn[target_ptr])[(*iter).first]).binary_op(CLP_UNION,x);
 			}
 		}
@@ -580,14 +578,14 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 							temp_vec_false.setabstractDomVec.push_back(false_constraint);
 						}
 						// propagate constraint maps
-						propagateConstraintMap(basic_block_ptr,((*op_vec_ptr)[2])->BasicBlockPtr,(*op_vec_ptr)[0]->auxilliary_op, &temp_vec_true); //  op_vec_ptr[2] is true path BB
-						propagateConstraintMap(basic_block_ptr,((*op_vec_ptr)[1])->BasicBlockPtr,(*op_vec_ptr)[0]->auxilliary_op, &temp_vec_false); // false path BB
 						SetabstractDomVec_t* existingConstraints = getExistingConstraints(basic_block_ptr, (*op_vec_ptr)[0]->auxilliary_op); 
 						if(existingConstraints != NULL){
-							cerr << "\t\t\t\t Propagating Existing Constraints as well \n";
-							propagateConstraintMap(basic_block_ptr,((*op_vec_ptr)[2])->BasicBlockPtr,(*op_vec_ptr)[0]->auxilliary_op, existingConstraints);
-							propagateConstraintMap(basic_block_ptr,((*op_vec_ptr)[1])->BasicBlockPtr,(*op_vec_ptr)[0]->auxilliary_op, existingConstraints);
+							cerr << "\t\t\t\t Intersecting Existing Constraints as well \n";
+							temp_vec_true=(temp_vec_true).binary_op(CLP_INTERSECT, (*existingConstraints));
+							temp_vec_false=(temp_vec_false).binary_op(CLP_INTERSECT, (*existingConstraints));
 						}
+						propagateConstraintMap(basic_block_ptr,((*op_vec_ptr)[2])->BasicBlockPtr,(*op_vec_ptr)[0]->auxilliary_op, &temp_vec_true); //  op_vec_ptr[2] is true path BB
+						propagateConstraintMap(basic_block_ptr,((*op_vec_ptr)[1])->BasicBlockPtr,(*op_vec_ptr)[0]->auxilliary_op, &temp_vec_false); // false path BB
 						propagateTIDConstraintMap(basic_block_ptr,((*op_vec_ptr)[2])->BasicBlockPtr);
 						propagateTIDConstraintMap(basic_block_ptr,((*op_vec_ptr)[1])->BasicBlockPtr);
 					}
