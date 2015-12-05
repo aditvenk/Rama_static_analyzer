@@ -10,6 +10,7 @@ std::set<BasicBlock*> BBInitList;
 std::set<BasicBlock*> BBSkipList;
 
 typedef std::map <abstractDom, SetabstractDom_t, abstractDomCompare> abstractMem;
+std::map <abstractDom, int, abstractDomCompare> abstractMemUpdates;
 std::map <BasicBlock*, abstractMem> abstractMemMap;
 
 typedef std::map<op_info *,SetabstractDomVec_t> abstractConstraint;
@@ -126,7 +127,6 @@ SetabstractDom_t loadFromMemory(BasicBlock *basic_block_ptr,SetabstractDom_t  ad
 }
 
 void storeToMemory(BasicBlock *basic_block_ptr, SetabstractDom_t  address, SetabstractDom_t  value) {
-
 	basic_block_ptr=NULL;	// a single map is used
 	std::set<abstractDom, abstractDomCompare>::iterator it; // iterate over target addresses
 	std::map<abstractDom,SetabstractDom_t,abstractDomCompare>::iterator it1; // iterate over map
@@ -144,18 +144,33 @@ void storeToMemory(BasicBlock *basic_block_ptr, SetabstractDom_t  address, Setab
 			abstractMem t1;
 			t1[(*it)]=value;
 			(abstractMemMap[basic_block_ptr])=t1;
+			abstractMemUpdates[(*it)]=1;
 			has_changed=true;
 			continue;
 		} 
 		// abstractMem is not empty
 		it1=(abstractMemMap[basic_block_ptr]).find(*it);
 		if(it1!=(abstractMemMap[basic_block_ptr]).end()) { // there exists an entry in abstractMem for this address
+			std::map<abstractDom,int,abstractDomCompare>::iterator count_it = abstractMemUpdates.find(*it);
+			if(count_it != abstractMemUpdates.end()){
+				cerr<< "Checking value of count:"<<count_it->second<<endl;
+				if(count_it->second > 10){
+					SetabstractDom_t top_setabstractDom;
+					clp_t t;
+					MAKE_TOP(t);
+					abstractDom abs(t);
+					top_setabstractDom.insert(abs);
+					(*it1).second=top_setabstractDom;
+					continue;
+				}
+				else{
+					count_it->second++;
+				}
+			}
 			if(!(EMPTY(clp_fn(CLP_INTERSECT,(*it).clp,(*it1).first.clp,false)))) { // addresses intersect
-
 				SetabstractDom_t old_value=(*it1).second;
 				(*it1).second=value.binary_op(CLP_UNION,(*it1).second); // the new value will be Union of old value and this update. Memory can get updated in any order by different threads. Hence, updates are weak.
 				SetabstractDom_t new_value=(*it1).second;
-
 				std::set<abstractDom, abstractDomCompare>::iterator it3;
 				std::set<abstractDom, abstractDomCompare>::iterator it4;
 				for(it3=old_value.SetabstractDom.begin();it3!=old_value.SetabstractDom.end();it3++){
@@ -195,6 +210,8 @@ void storeToMemory(BasicBlock *basic_block_ptr, SetabstractDom_t  address, Setab
 		}
 		else {
 			(abstractMemMap[basic_block_ptr])[(*it)]=value;
+			abstractMemUpdates[(*it)]=1;
+			cerr<< "Adding to memUpdates"<<endl;
 			has_changed=true;
 		}
 	}
@@ -897,10 +914,12 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 	has_changed=false;
 	if(dst_ptr->abstractDomain!=result.abstractDomain)
 	{
+		cerr<<"Not same "<<endl;
 		SetabstractDomVec_t old_val=dst_ptr->abstractDomain;
 		dst_ptr->abstractDomain=result.abstractDomain;
 		has_changed=true;
 		if(old_val.setabstractDomVec.size()==result.abstractDomain.setabstractDomVec.size()) {
+			cerr<<"Checked sizze"<<endl;
 			int size=old_val.setabstractDomVec.size();
 			for(int i=0;i<size;i++) {
 				SetabstractDom_t *s1=&(old_val.setabstractDomVec[i]);
@@ -910,7 +929,10 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 				for(it2=s2->SetabstractDom.begin();it2!=s2->SetabstractDom.end();){
 					std::string n2=it2->name;
 					clp_t x2=it2->clp;
-					if(TOP(x2)) continue;
+					if(TOP(x2)){
+						it2++;
+						continue;
+					}
 					bool found=false;
 					std::string n1;
 					clp_t x1;
@@ -945,7 +967,6 @@ bool FunctionAnalysis::abstractCompute (BasicBlock* basic_block_ptr, unsigned op
 	dst_ptr->cmp_val=result.cmp_val;
 	dst_ptr->cmp_pred=cmp_pred;
 	dst_ptr->width = result.width;
-
 	return has_changed;
 }
 
